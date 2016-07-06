@@ -80,13 +80,14 @@ type DockerTaskEngine struct {
 	credentialsManager credentials.Manager
 	_time              ttime.Time
 	_timeOnce          sync.Once
+	imageManager       ImageManager
 }
 
 // NewDockerTaskEngine returns a created, but uninitialized, DockerTaskEngine.
 // The distinction between created and initialized is that when created it may
 // be serialized/deserialized, but it will not communicate with docker until it
 // is also initialized.
-func NewDockerTaskEngine(cfg *config.Config, client DockerClient, credentialsManager credentials.Manager) *DockerTaskEngine {
+func NewDockerTaskEngine(cfg *config.Config, client DockerClient, credentialsManager credentials.Manager, imageManager ImageManager) *DockerTaskEngine {
 	dockerTaskEngine := &DockerTaskEngine{
 		cfg:    cfg,
 		client: client,
@@ -100,6 +101,7 @@ func NewDockerTaskEngine(cfg *config.Config, client DockerClient, credentialsMan
 		taskEvents:      make(chan api.TaskStateChange),
 
 		credentialsManager: credentialsManager,
+		imageManager:       imageManager,
 	}
 
 	return dockerTaskEngine
@@ -266,6 +268,7 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 		if err != nil {
 			log.Debug("Unable to remove old container", "err", err, "task", task, "cont", cont)
 		}
+		engine.imageManager.removeContainerFromImage(cont)
 	}
 }
 
@@ -432,7 +435,12 @@ func (engine *DockerTaskEngine) GetTaskByArn(arn string) (*api.Task, bool) {
 
 func (engine *DockerTaskEngine) pullContainer(task *api.Task, container *api.Container) DockerContainerMetadata {
 	log.Info("Pulling container", "task", task, "container", container)
-	return engine.client.PullImage(container.Image, container.RegistryAuthentication)
+	metadata := engine.client.PullImage(container.Image, container.RegistryAuthentication)
+	err := engine.imageManager.addContainerToImage(container)
+	if err != nil {
+		log.Error("Error while adding Container to Image State")
+	}
+	return metadata
 }
 
 func (engine *DockerTaskEngine) createContainer(task *api.Task, container *api.Container) DockerContainerMetadata {

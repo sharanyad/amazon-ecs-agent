@@ -100,8 +100,10 @@ func _main() int {
 	// Create credentials manager. This will be used by the task engine and
 	// the credentials handler
 	credentialsManager := credentials.NewManager()
+	// Create image manager. This will be used by the task engine for saving image states
+	imageManager := engine.NewImageManager()
 	if *versionFlag {
-		versionableEngine := engine.NewTaskEngine(cfg, dockerClient, credentialsManager)
+		versionableEngine := engine.NewTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 		version.PrintVersion(versionableEngine)
 		return exitcodes.ExitSuccess
 	}
@@ -122,7 +124,7 @@ func _main() int {
 	if cfg.Checkpoint {
 		log.Info("Checkpointing is enabled. Attempting to load state")
 		var previousCluster, previousEc2InstanceID, previousContainerInstanceArn string
-		previousTaskEngine := engine.NewTaskEngine(cfg, dockerClient, credentialsManager)
+		previousTaskEngine := engine.NewTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 		// previousState is used to verify that our current runtime configuration is
 		// compatible with our past configuration as reflected by our state-file
 		previousState, err := initializeStateManager(cfg, previousTaskEngine, &previousCluster, &previousContainerInstanceArn, &previousEc2InstanceID)
@@ -162,7 +164,7 @@ func _main() int {
 			log.Warnf("Data mismatch; saved InstanceID '%v' does not match current InstanceID '%v'. Overwriting old datafile", previousEc2InstanceID, currentEc2InstanceID)
 
 			// Reset taskEngine; all the other values are still default
-			taskEngine = engine.NewTaskEngine(cfg, dockerClient, credentialsManager)
+			taskEngine = engine.NewTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 		} else {
 			// Use the values we loaded if there's no issue
 			containerInstanceArn = previousContainerInstanceArn
@@ -170,7 +172,7 @@ func _main() int {
 		}
 	} else {
 		log.Info("Checkpointing not enabled; a new container instance will be created each time the agent is run")
-		taskEngine = engine.NewTaskEngine(cfg, dockerClient, credentialsManager)
+		taskEngine = engine.NewTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 	}
 
 	stateManager, err := initializeStateManager(cfg, taskEngine, &cfg.Cluster, &containerInstanceArn, &currentEc2InstanceID)
