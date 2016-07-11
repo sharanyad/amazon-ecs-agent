@@ -36,18 +36,19 @@ const credentialsId = "credsid"
 
 var defaultConfig = config.DefaultConfig()
 
-func mocks(t *testing.T, cfg *config.Config) (*gomock.Controller, *MockDockerClient, *mock_ttime.MockTime, TaskEngine, *mock_credentials.MockManager) {
+func mocks(t *testing.T, cfg *config.Config) (*gomock.Controller, *MockDockerClient, *mock_ttime.MockTime, TaskEngine, *mock_credentials.MockManager, *MockImageManager) {
 	ctrl := gomock.NewController(t)
 	client := NewMockDockerClient(ctrl)
 	mockTime := mock_ttime.NewMockTime(ctrl)
 	credentialsManager := mock_credentials.NewMockManager(ctrl)
-	taskEngine := NewTaskEngine(cfg, client, credentialsManager)
+	imageManager := NewMockImageManager(ctrl)
+	taskEngine := NewTaskEngine(cfg, client, credentialsManager, imageManager)
 	taskEngine.(*DockerTaskEngine)._time = mockTime
-	return ctrl, client, mockTime, taskEngine, credentialsManager
+	return ctrl, client, mockTime, taskEngine, credentialsManager, imageManager
 }
 
 func TestBatchContainerHappyPath(t *testing.T) {
-	ctrl, client, mockTime, taskEngine, credentialsManager := mocks(t, &defaultConfig)
+	ctrl, client, mockTime, taskEngine, credentialsManager, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 
 	roleCredentials := &credentials.TaskIAMRoleCredentials{
@@ -74,6 +75,7 @@ func TestBatchContainerHappyPath(t *testing.T) {
 	for _, container := range sleepTask.Containers {
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
+		imageManager.EXPECT().addContainerToImage(container)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		// Container config should get updated with this during PostUnmarshalTask
 		credentialsEndpointEnvValue := roleCredentials.IAMRoleCredentials.GenerateCredentialsEndpointRelativeURI()
@@ -178,6 +180,7 @@ func TestBatchContainerHappyPath(t *testing.T) {
 		}
 	}).Return(nil)
 
+	imageManager.EXPECT().removeContainerFromImage(gomock.Any())
 	// trigger cleanup
 	cleanup <- time.Now()
 	go func() { eventStream <- dockerEvent(api.ContainerStopped) }()
@@ -194,7 +197,7 @@ func TestBatchContainerHappyPath(t *testing.T) {
 }
 
 func TestRemoveEvents(t *testing.T) {
-	ctrl, client, testTime, taskEngine, _ := mocks(t, &defaultConfig)
+	ctrl, client, testTime, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 
 	sleepTask := testdata.LoadTask("sleep5")
@@ -213,6 +216,7 @@ func TestRemoveEvents(t *testing.T) {
 	var createdContainerName string
 	for _, container := range sleepTask.Containers {
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
+		imageManager.EXPECT().addContainerToImage(container)
 		client.EXPECT().CreateContainer(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(x, y interface{}, containerName string) {
 			// sleep5 task contains only one container. Just assign
 			// the containerName to createdContainerName
@@ -295,6 +299,7 @@ func TestRemoveEvents(t *testing.T) {
 		eventStream <- dockerEvent(api.ContainerStopped)
 	}).Return(nil)
 
+	imageManager.EXPECT().removeContainerFromImage(gomock.Any())
 	// trigger cleanup
 	cleanup <- time.Now()
 
@@ -309,7 +314,7 @@ func TestRemoveEvents(t *testing.T) {
 }
 
 func TestStartTimeoutThenStart(t *testing.T) {
-	ctrl, client, testTime, taskEngine, _ := mocks(t, &defaultConfig)
+	ctrl, client, testTime, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 
 	sleepTask := testdata.LoadTask("sleep5")
@@ -329,6 +334,7 @@ func TestStartTimeoutThenStart(t *testing.T) {
 
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
+		imageManager.EXPECT().addContainerToImage(container)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		if err != nil {
 			t.Fatal(err)
@@ -400,7 +406,7 @@ func TestStartTimeoutThenStart(t *testing.T) {
 }
 
 func TestSteadyStatePoll(t *testing.T) {
-	ctrl, client, testTime, taskEngine, _ := mocks(t, &defaultConfig)
+	ctrl, client, testTime, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 
 	sleepTask := testdata.LoadTask("sleep5")
@@ -419,6 +425,7 @@ func TestSteadyStatePoll(t *testing.T) {
 
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
+		imageManager.EXPECT().addContainerToImage(container)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		if err != nil {
 			t.Fatal(err)
@@ -495,7 +502,7 @@ func TestSteadyStatePoll(t *testing.T) {
 }
 
 func TestStopWithPendingStops(t *testing.T) {
-	ctrl, client, testTime, taskEngine, _ := mocks(t, &defaultConfig)
+	ctrl, client, testTime, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 	testTime.EXPECT().Now().AnyTimes()
 	testTime.EXPECT().After(gomock.Any()).AnyTimes()
@@ -529,6 +536,7 @@ func TestStopWithPendingStops(t *testing.T) {
 	client.EXPECT().PullImage(gomock.Any(), nil).Do(func(x, y interface{}) {
 		<-pulling
 	})
+	imageManager.EXPECT().addContainerToImage(gomock.Any())
 	taskEngine.AddTask(sleepTask2)
 	stopSleep2 := *sleepTask2
 	stopSleep2.DesiredStatus = api.TaskStopped
@@ -545,7 +553,7 @@ func TestStopWithPendingStops(t *testing.T) {
 }
 
 func TestCreateContainerForceSave(t *testing.T) {
-	ctrl, client, _, privateTaskEngine, _ := mocks(t, &config.Config{})
+	ctrl, client, _, privateTaskEngine, _, _ := mocks(t, &config.Config{})
 	saver := mock_statemanager.NewMockStateManager(ctrl)
 	defer ctrl.Finish()
 	taskEngine, _ := privateTaskEngine.(*DockerTaskEngine)
@@ -576,7 +584,7 @@ func TestCreateContainerForceSave(t *testing.T) {
 }
 
 func TestCreateContainerMergesLabels(t *testing.T) {
-	ctrl, client, _, taskEngine, _ := mocks(t, &defaultConfig)
+	ctrl, client, _, taskEngine, _, _ := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 
 	testTask := &api.Task{
@@ -612,7 +620,7 @@ func TestCreateContainerMergesLabels(t *testing.T) {
 // only when terminal events are recieved from docker event stream when
 // StopContainer times out
 func TestTaskTransitionWhenStopContainerTimesout(t *testing.T) {
-	ctrl, client, mockTime, taskEngine, _ := mocks(t, &defaultConfig)
+	ctrl, client, mockTime, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 
 	sleepTask := testdata.LoadTask("sleep5")
@@ -633,6 +641,7 @@ func TestTaskTransitionWhenStopContainerTimesout(t *testing.T) {
 
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
+		imageManager.EXPECT().addContainerToImage(container)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		if err != nil {
 			t.Fatal(err)
@@ -712,7 +721,7 @@ func TestCapabilities(t *testing.T) {
 		AppArmorCapable:         true,
 		TaskCleanupWaitDuration: config.DefaultConfig().TaskCleanupWaitDuration,
 	}
-	ctrl, client, _, taskEngine, _ := mocks(t, conf)
+	ctrl, client, _, taskEngine, _, _ := mocks(t, conf)
 	defer ctrl.Finish()
 
 	client.EXPECT().SupportedVersions().Return([]dockerclient.DockerVersion{
@@ -739,7 +748,7 @@ func TestCapabilities(t *testing.T) {
 
 func TestCapabilitiesECR(t *testing.T) {
 	conf := &config.Config{}
-	ctrl, client, _, taskEngine, _ := mocks(t, conf)
+	ctrl, client, _, taskEngine, _, _ := mocks(t, conf)
 	defer ctrl.Finish()
 
 	client.EXPECT().SupportedVersions().Return([]dockerclient.DockerVersion{
@@ -762,7 +771,7 @@ func TestCapabilitiesTaskIAMRoleForSupportedDockerVersion(t *testing.T) {
 	conf := &config.Config{
 		TaskIAMRoleEnabled: true,
 	}
-	ctrl, client, _, taskEngine, _ := mocks(t, conf)
+	ctrl, client, _, taskEngine, _, _ := mocks(t, conf)
 	defer ctrl.Finish()
 
 	client.EXPECT().SupportedVersions().Return([]dockerclient.DockerVersion{
@@ -784,7 +793,7 @@ func TestCapabilitiesTaskIAMRoleForUnSupportedDockerVersion(t *testing.T) {
 	conf := &config.Config{
 		TaskIAMRoleEnabled: true,
 	}
-	ctrl, client, _, taskEngine, _ := mocks(t, conf)
+	ctrl, client, _, taskEngine, _, _ := mocks(t, conf)
 	defer ctrl.Finish()
 
 	client.EXPECT().SupportedVersions().Return([]dockerclient.DockerVersion{
@@ -805,11 +814,12 @@ func TestCapabilitiesTaskIAMRoleForUnSupportedDockerVersion(t *testing.T) {
 func TestGetTaskByArn(t *testing.T) {
 	// Need a mock client as AddTask not only adds a task to the engine, but
 	// also causes the engine to progress the task.
-	ctrl, client, _, taskEngine, _ := mocks(t, &defaultConfig)
+	ctrl, client, _, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 	eventStream := make(chan DockerContainerChangeEvent)
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	client.EXPECT().PullImage(gomock.Any(), gomock.Any()).AnyTimes() // TODO change to MaxTimes(1)
+	imageManager.EXPECT().addContainerToImage(gomock.Any())
 	err := taskEngine.Init()
 	if err != nil {
 		t.Fatal(err)

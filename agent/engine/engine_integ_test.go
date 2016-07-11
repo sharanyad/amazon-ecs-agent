@@ -74,7 +74,8 @@ func setup(cfg *config.Config, t *testing.T) (TaskEngine, func(), credentials.Ma
 		t.Fatalf("Error creating Docker client: %v", err)
 	}
 	credentialsManager := credentials.NewManager()
-	taskEngine := NewDockerTaskEngine(cfg, dockerClient, credentialsManager)
+	imageManager := NewImageManager()
+	taskEngine := NewDockerTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 	taskEngine.Init()
 	return taskEngine, func() {
 		taskEngine.Shutdown()

@@ -72,7 +72,7 @@ func (imageManager *DockerImageManager) addContainerToImage(container *api.Conta
 	}
 	imageinspected, error := dockerClient.InspectImage(container.Image)
 	if error != nil {
-		log.Debug("Bad image : %v", container.Image)
+		log.Debug("Bad image", "image", container.Image)
 		return error
 	} else {
 		repository, tag := docker.ParseRepositoryTag(container.Image)

@@ -320,3 +320,50 @@ func (_m *MockDockerClient) WithVersion(_param0 dockerclient.DockerVersion) Dock
 func (_mr *_MockDockerClientRecorder) WithVersion(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "WithVersion", arg0)
 }
+
+// Mock of ImageManager interface
+type MockImageManager struct {
+	ctrl     *gomock.Controller
+	recorder *_MockImageManagerRecorder
+}
+
+// Recorder for MockDockerClient (not exported)
+type _MockImageManagerRecorder struct {
+	mock *MockImageManager
+}
+
+func NewMockImageManager(ctrl *gomock.Controller) *MockImageManager {
+	mock := &MockImageManager{ctrl: ctrl}
+	mock.recorder = &_MockImageManagerRecorder{mock}
+	return mock
+}
+
+func (_m *MockImageManager) EXPECT() *_MockImageManagerRecorder {
+	return _m.recorder
+}
+
+func (_m *MockImageManager) addContainerToImage(_param0 *api.Container) error {
+	ret := _m.ctrl.Call(_m, "addContainerToImage", _param0)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+func (_mr *_MockImageManagerRecorder) addContainerToImage(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "addContainerToImage", arg0)
+}
+
+func (_m *MockImageManager) removeContainerFromImage(_param0 *api.Container) {
+	_m.ctrl.Call(_m, "removeContainerFromImage", _param0)
+}
+
+func (_mr *_MockImageManagerRecorder) removeContainerFromImage(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "removeContainerFromImage", arg0)
+}
+
+func (_m *MockImageManager) addImageState(_param0 *ImageState) {
+	_m.ctrl.Call(_m, "addImageState", _param0)
+}
+
+func (_mr *_MockImageManagerRecorder) addImageState(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "addImageState", arg0)
+}
