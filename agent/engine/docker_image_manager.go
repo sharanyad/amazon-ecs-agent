@@ -9,12 +9,15 @@ import (
 	docker "github.com/fsouza/go-dockerclient"
 )
 
+// ImageManager is responsible for saving the Image states,
+// adding and removing container references to ImageStates
 type ImageManager interface {
-	addImageState(imageState *ImageState)
-	addContainerToImage(container *api.Container) error
-	removeContainerFromImage(container *api.Container)
+	AddImageState(imageState *ImageState)
+	AddContainerReferenceToImageState(container *api.Container) error
+	RemoveContainerReferenceFromImageState(container *api.Container)
 }
 
+// Image is the type representing a docker image and its various properties
 type Image struct {
 	ImageId string
 	Name    string
@@ -23,92 +26,102 @@ type Image struct {
 	Size    int64
 }
 
+// ImageState is the type representing a docker image
+// and its state information such as containers associated with it
 type ImageState struct {
 	Image        *Image
 	Containers   []*api.Container
 	PulledTime   time.Time
-	lastUsedTime time.Time
+	LastUsedTime time.Time
 }
 
-// ImageManager accounts all the images and their states in the instance.
+// DockerImageManager accounts all the images and their states in the instance.
 // It also has the cleanup policy configuration.
-type DockerImageManager struct {
-	ImageStates []*ImageState
+type dockerImageManager struct {
+	imageStates []*ImageState
 	// TODO: add cleanup policy details
-	ImageStateLock sync.Mutex
+	imageStateLock sync.RWMutex
+	client         DockerClient
 }
 
-func NewImageManager() ImageManager {
-	imageManager := &DockerImageManager{}
-	return imageManager
-}
-
-func (imageManager *DockerImageManager) addImageState(imageState *ImageState) {
-	imageManager.ImageStateLock.Lock()
-	defer imageManager.ImageStateLock.Unlock()
-	imageManager.ImageStates = append(imageManager.ImageStates, imageState)
-}
-
-func (imageManager *DockerImageManager) getImageStates() []*ImageState {
-	imageManager.ImageStateLock.Lock()
-	defer imageManager.ImageStateLock.Unlock()
-	return imageManager.ImageStates
-}
-
-func (imageManager *DockerImageManager) addContainerToImage(container *api.Container) error {
-	for _, imageState := range imageManager.getImageStates() {
-		if imageState.Image.Name == container.Image {
-			// Image State already exists; add Container to it
-			seelog.Infof("Adding container reference- %v to Image state- %v", container.Name, imageState.Image.Name)
-			imageState.Containers = append(imageState.Containers, container)
-			return nil
-		}
+func NewImageManager(client DockerClient) ImageManager {
+	return &dockerImageManager{
+		client: client,
 	}
-	// Inspect image for creating new Image Object
-	dockerClient, err := docker.NewClientFromEnv()
-	if err != nil {
-		log.Debug("cannot create Docker Client")
-		return err
-	}
-	imageinspected, error := dockerClient.InspectImage(container.Image)
-	if error != nil {
-		log.Debug("Bad image", "image", container.Image)
-		return error
-	} else {
-		repository, tag := docker.ParseRepositoryTag(container.Image)
-		var sourceImage *Image
-		sourceImage = &Image{
-			ImageId: imageinspected.ID,
-			Name:    container.Image,
-			Repo:    repository,
-			Tag:     tag,
-			Size:    imageinspected.Size,
-		}
-		imageState := &ImageState{
-			Image:      sourceImage,
-			PulledTime: time.Now(),
-		}
-		seelog.Infof("Adding container reference- %v to Image state %v", container.Name, sourceImage.Name)
+}
+
+// AddImageState appends the imageState to list of imageState objects in ImageManager
+func (imageManager *dockerImageManager) AddImageState(imageState *ImageState) {
+	imageManager.imageStateLock.Lock()
+	defer imageManager.imageStateLock.Unlock()
+	imageManager.imageStates = append(imageManager.imageStates, imageState)
+}
+
+// getAllImageStates returns the list of imageStates in the instance
+func (imageManager *dockerImageManager) getAllImageStates() []*ImageState {
+	imageManager.imageStateLock.RLock()
+	defer imageManager.imageStateLock.RUnlock()
+	return imageManager.imageStates
+}
+
+// AddContainerReferenceToImageState adds container reference to the corresponding imageState object
+func (imageManager *dockerImageManager) AddContainerReferenceToImageState(container *api.Container) error {
+	imageState, exist := imageManager.getImageState(container)
+	if exist {
+		// Image State already exists; add Container to it
+		seelog.Infof("Adding container reference- %v to Image state- %v", container.Name, imageState.Image.Name)
 		imageState.Containers = append(imageState.Containers, container)
-		imageManager.addImageState(imageState)
 		return nil
 	}
+	// Inspect image for creating new Image Object
+	imageinspected, err := imageManager.client.InspectImage(container.Image)
+	if err != nil {
+		seelog.Debugf("Bad image: %v", container.Image)
+		return err
+	}
+	repository, tag := docker.ParseRepositoryTag(container.Image)
+	var sourceImage *Image
+	sourceImage = &Image{
+		ImageId: imageinspected.ID,
+		Name:    container.Image,
+		Repo:    repository,
+		Tag:     tag,
+		Size:    imageinspected.Size,
+	}
+	sourceImageState := &ImageState{
+		Image:      sourceImage,
+		PulledTime: time.Now(),
+	}
+	seelog.Infof("Adding container reference- %v to Image state %v", container.Name, sourceImage.Name)
+	sourceImageState.Containers = append(sourceImageState.Containers, container)
+	imageManager.AddImageState(sourceImageState)
+	return nil
 }
 
-func (imageManager *DockerImageManager) removeContainerFromImage(container *api.Container) {
+// RemoveContainerReferenceFromImageState removes container reference from the corresponding imageState object
+func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(container *api.Container) {
 	// Find image states that this container is part of, and remove the reference
-	for _, imageState := range imageManager.getImageStates() {
-		if imageState.Image.Name == container.Image {
-			// Found matching ImageState
-			for i := len(imageState.Containers) - 1; i >= 0; i-- {
-				if imageState.Containers[i].Name == container.Name {
-					// Container reference found; hence remove it
-					seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Name, imageState.Image.Name)
-					imageState.Containers = append(imageState.Containers[:i], imageState.Containers[i+1:]...)
-					// Update the last used time for the image
-					imageState.lastUsedTime = time.Now()
-				}
+	imageState, ok := imageManager.getImageState(container)
+	if ok {
+		// Found matching ImageState
+		for i := len(imageState.Containers) - 1; i >= 0; i-- {
+			if imageState.Containers[i].Name == container.Name {
+				// Container reference found; hence remove it
+				seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Name, imageState.Image.Name)
+				imageState.Containers = append(imageState.Containers[:i], imageState.Containers[i+1:]...)
+				// Update the last used time for the image
+				imageState.LastUsedTime = time.Now()
 			}
 		}
 	}
+}
+
+// getImageState returns the ImageState object that the container is referenced at
+func (imageManager *dockerImageManager) getImageState(container *api.Container) (*ImageState, bool) {
+	for _, imageState := range imageManager.getAllImageStates() {
+		if imageState.Image.Name == container.Image {
+			return imageState, true
+		}
+	}
+	return nil, false
 }

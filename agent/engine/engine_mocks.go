@@ -229,6 +229,17 @@ func (_mr *_MockDockerClientRecorder) InspectContainer(arg0 interface{}) *gomock
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "InspectContainer", arg0)
 }
 
+func (_m *MockDockerClient) InspectImage(_param0 string) (*go_dockerclient.Image, error) {
+	ret := _m.ctrl.Call(_m, "InspectImage", _param0)
+	ret0, _ := ret[0].(*go_dockerclient.Image)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+func (_mr *_MockDockerClientRecorder) InspectImage(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "InspectImage", arg0)
+}
+
 func (_m *MockDockerClient) ListContainers(_param0 bool) ListContainersResponse {
 	ret := _m.ctrl.Call(_m, "ListContainers", _param0)
 	ret0, _ := ret[0].(ListContainersResponse)
@@ -342,28 +353,28 @@ func (_m *MockImageManager) EXPECT() *_MockImageManagerRecorder {
 	return _m.recorder
 }
 
-func (_m *MockImageManager) addContainerToImage(_param0 *api.Container) error {
-	ret := _m.ctrl.Call(_m, "addContainerToImage", _param0)
+func (_m *MockImageManager) AddContainerReferenceToImageState(_param0 *api.Container) error {
+	ret := _m.ctrl.Call(_m, "AddContainerReferenceToImageState", _param0)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-func (_mr *_MockImageManagerRecorder) addContainerToImage(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "addContainerToImage", arg0)
+func (_mr *_MockImageManagerRecorder) AddContainerReferenceToImageState(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "AddContainerReferenceToImageState", arg0)
 }
 
-func (_m *MockImageManager) removeContainerFromImage(_param0 *api.Container) {
-	_m.ctrl.Call(_m, "removeContainerFromImage", _param0)
+func (_m *MockImageManager) RemoveContainerReferenceFromImageState(_param0 *api.Container) {
+	_m.ctrl.Call(_m, "RemoveContainerReferenceFromImageState", _param0)
 }
 
-func (_mr *_MockImageManagerRecorder) removeContainerFromImage(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "removeContainerFromImage", arg0)
+func (_mr *_MockImageManagerRecorder) RemoveContainerReferenceFromImageState(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "RemoveContainerReferenceFromImageState", arg0)
 }
 
-func (_m *MockImageManager) addImageState(_param0 *ImageState) {
-	_m.ctrl.Call(_m, "addImageState", _param0)
+func (_m *MockImageManager) AddImageState(_param0 *ImageState) {
+	_m.ctrl.Call(_m, "AddImageState", _param0)
 }
 
-func (_mr *_MockImageManagerRecorder) addImageState(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "addImageState", arg0)
+func (_mr *_MockImageManagerRecorder) AddImageState(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "AddImageState", arg0)
 }

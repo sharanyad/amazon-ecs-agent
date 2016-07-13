@@ -82,6 +82,7 @@ type DockerClient interface {
 	Stats(string, context.Context) (<-chan *docker.Stats, error)
 
 	Version() (string, error)
+	InspectImage(string) (*docker.Image, error)
 }
 
 // DockerGoClient wraps the underlying go-dockerclient library.
@@ -318,6 +319,15 @@ func (dg *dockerGoClient) createScratchImageIfNotExists() error {
 		InputStream: reader,
 	})
 	return err
+}
+
+func (dg *dockerGoClient) InspectImage(image string) (*docker.Image, error) {
+	client, err := dg.dockerClient()
+	if err != nil {
+		seelog.Infof("cannot create docker client")
+		return nil, err
+	}
+	return client.InspectImage(image)
 }
 
 func (dg *dockerGoClient) getAuthdata(image string, authData *api.RegistryAuthenticationData) (docker.AuthConfiguration, error) {

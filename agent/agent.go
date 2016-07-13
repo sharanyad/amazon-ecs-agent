@@ -101,7 +101,7 @@ func _main() int {
 	// the credentials handler
 	credentialsManager := credentials.NewManager()
 	// Create image manager. This will be used by the task engine for saving image states
-	imageManager := engine.NewImageManager()
+	imageManager := engine.NewImageManager(dockerClient)
 	if *versionFlag {
 		versionableEngine := engine.NewTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 		version.PrintVersion(versionableEngine)
