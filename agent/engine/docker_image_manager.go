@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -14,7 +15,8 @@ import (
 type ImageManager interface {
 	AddImageState(imageState *ImageState)
 	AddContainerReferenceToImageState(container *api.Container) error
-	RemoveContainerReferenceFromImageState(container *api.Container)
+	RemoveContainerReferenceFromImageState(container *api.Container) error
+	// TODO: RemoveImageState(imageState *ImageState) error
 }
 
 // Image is the type representing a docker image and its various properties
@@ -66,10 +68,13 @@ func (imageManager *dockerImageManager) getAllImageStates() []*ImageState {
 
 // AddContainerReferenceToImageState adds container reference to the corresponding imageState object
 func (imageManager *dockerImageManager) AddContainerReferenceToImageState(container *api.Container) error {
+	if container.Image == "" {
+		return fmt.Errorf("Invalid container reference")
+	}
 	imageState, exist := imageManager.getImageState(container)
 	if exist {
 		// Image State already exists; add Container to it
-		seelog.Infof("Adding container reference- %v to Image state- %v", container.Name, imageState.Image.Name)
+		seelog.Infof("Adding container reference- %v to Image state- %v", container.Image, imageState.Image.Name)
 		imageState.Containers = append(imageState.Containers, container)
 		return nil
 	}
@@ -92,28 +97,32 @@ func (imageManager *dockerImageManager) AddContainerReferenceToImageState(contai
 		Image:      sourceImage,
 		PulledTime: time.Now(),
 	}
-	seelog.Infof("Adding container reference- %v to Image state %v", container.Name, sourceImage.Name)
+	seelog.Infof("Adding container reference- %v to Image state %v", container.Image, sourceImage.Name)
 	sourceImageState.Containers = append(sourceImageState.Containers, container)
 	imageManager.AddImageState(sourceImageState)
 	return nil
 }
 
 // RemoveContainerReferenceFromImageState removes container reference from the corresponding imageState object
-func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(container *api.Container) {
+func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(container *api.Container) error {
+	if container.Image == "" {
+		return fmt.Errorf("Invalid container reference")
+	}
 	// Find image states that this container is part of, and remove the reference
 	imageState, ok := imageManager.getImageState(container)
 	if ok {
 		// Found matching ImageState
 		for i := len(imageState.Containers) - 1; i >= 0; i-- {
-			if imageState.Containers[i].Name == container.Name {
+			if imageState.Containers[i].Image == container.Image {
 				// Container reference found; hence remove it
-				seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Name, imageState.Image.Name)
+				seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Image, imageState.Image.Name)
 				imageState.Containers = append(imageState.Containers[:i], imageState.Containers[i+1:]...)
 				// Update the last used time for the image
 				imageState.LastUsedTime = time.Now()
 			}
 		}
 	}
+	return nil
 }
 
 // getImageState returns the ImageState object that the container is referenced at
