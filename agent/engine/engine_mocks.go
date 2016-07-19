@@ -380,3 +380,23 @@ func (_m *MockImageManager) AddImageState(_param0 *ImageState) {
 func (_mr *_MockImageManagerRecorder) AddImageState(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "AddImageState", arg0)
 }
+
+func (_m *MockImageManager) GetEligibleImagesForDeletion() []*ImageState {
+	ret := _m.ctrl.Call(_m, "GetEligibleImagesForDeletion")
+	ret0, _ := ret[0].([]*ImageState)
+	return ret0
+}
+
+func (_mr *_MockImageManagerRecorder) GetEligibleImagesForDeletion(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "GetEligibleImagesForDeletion", arg0)
+}
+
+func (_m *MockImageManager) GetLeastRecentlyUsedImages(_param0 ImageStatesForDeletion) ImageStatesForDeletion {
+	ret := _m.ctrl.Call(_m, "GetLeastRecentlyUsedImages", _param0)
+	ret0, _ := ret[0].(ImageStatesForDeletion)
+	return ret0
+}
+
+func (_mr *_MockImageManagerRecorder) GetLeastRecentlyUsedImages(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "GetLeastRecentlyUsedImages", arg0)
+}

@@ -3,12 +3,17 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	"github.com/cihub/seelog"
 	docker "github.com/fsouza/go-dockerclient"
+)
+
+const (
+	IMAGES_TO_DELETE = 5
 )
 
 // ImageManager is responsible for saving the Image states,
@@ -18,6 +23,8 @@ type ImageManager interface {
 	AddContainerReferenceToImageState(container *api.Container) error
 	RemoveContainerReferenceFromImageState(container *api.Container) error
 	// TODO: RemoveImageState(imageState *ImageState) error
+	GetEligibleImagesForDeletion() []*ImageState
+	GetLeastRecentlyUsedImages(ImageStatesForDeletion) ImageStatesForDeletion
 }
 
 // Image is the type representing a docker image and its various properties
@@ -47,11 +54,15 @@ type dockerImageManager struct {
 	// TODO: add cleanup policy details
 	imageStateLock sync.RWMutex
 	client         DockerClient
+	minAge         time.Duration
 }
+
+type ImageStatesForDeletion []*ImageState
 
 func NewImageManager(client DockerClient) ImageManager {
 	return &dockerImageManager{
 		client: client,
+		minAge: 1 * time.Hour,
 	}
 }
 
@@ -168,4 +179,48 @@ func (imageManager *dockerImageManager) hasImageName(imageState *ImageState, con
 		}
 	}
 	return false
+}
+
+func (imageManager *dockerImageManager) GetEligibleImagesForDeletion() []*ImageState {
+	if len(imageManager.imageStates) < 1 {
+		return nil
+	}
+	var imagesForDeletion []*ImageState
+	for _, imageState := range imageManager.getAllImageStates() {
+		if imageManager.isImageOldEnough(imageState) && hasNoAssociatedContainers(imageState) {
+			seelog.Infof("Image eligible for deletion: %+v", imageState)
+			imagesForDeletion = append(imagesForDeletion, imageState)
+		}
+	}
+	return imagesForDeletion
+}
+
+func hasNoAssociatedContainers(imageState *ImageState) bool {
+	return len(imageState.Containers) == 0
+}
+
+func (imageManager *dockerImageManager) isImageOldEnough(imageState *ImageState) bool {
+	ageOfImage := time.Now().Sub(imageState.PulledTime)
+	return imageManager.minAge < ageOfImage
+}
+
+func (imageStates ImageStatesForDeletion) Len() int {
+	return len(imageStates)
+}
+
+func (imageStates ImageStatesForDeletion) Less(i, j int) bool {
+	return imageStates[i].LastUsedTime.Before(imageStates[j].LastUsedTime)
+}
+
+func (imageStates ImageStatesForDeletion) Swap(i, j int) {
+	imageStates[i], imageStates[j] = imageStates[j], imageStates[i]
+}
+
+func (imageManager *dockerImageManager) GetLeastRecentlyUsedImages(imagesForDeletion ImageStatesForDeletion) ImageStatesForDeletion {
+	if len(imagesForDeletion) <= IMAGES_TO_DELETE {
+		return imagesForDeletion
+	}
+	// sort images in the order of last used times
+	sort.Sort(imagesForDeletion)
+	return imagesForDeletion[:IMAGES_TO_DELETE]
 }
