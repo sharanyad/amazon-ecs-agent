@@ -268,7 +268,10 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 		if err != nil {
 			log.Debug("Unable to remove old container", "err", err, "task", task, "cont", cont)
 		}
-		engine.imageManager.RemoveContainerReferenceFromImageState(cont)
+		err = engine.imageManager.RemoveContainerReferenceFromImageState(cont)
+		if err != nil {
+			seelog.Errorf("Error removing container reference from image state: %v", err)
+		}
 	}
 }
 
@@ -438,7 +441,7 @@ func (engine *DockerTaskEngine) pullContainer(task *api.Task, container *api.Con
 	metadata := engine.client.PullImage(container.Image, container.RegistryAuthentication)
 	err := engine.imageManager.AddContainerReferenceToImageState(container)
 	if err != nil {
-		log.Error("Error while adding Container to Image State")
+		seelog.Errorf("Error adding container reference to image state: %v", err)
 	}
 	return metadata
 }

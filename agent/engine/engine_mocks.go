@@ -372,11 +372,3 @@ func (_m *MockImageManager) RemoveContainerReferenceFromImageState(_param0 *api.
 func (_mr *_MockImageManagerRecorder) RemoveContainerReferenceFromImageState(arg0 interface{}) *gomock.Call {
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "RemoveContainerReferenceFromImageState", arg0)
 }
-
-func (_m *MockImageManager) AddImageState(_param0 *ImageState) {
-	_m.ctrl.Call(_m, "AddImageState", _param0)
-}
-
-func (_mr *_MockImageManagerRecorder) AddImageState(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "AddImageState", arg0)
-}

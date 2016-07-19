@@ -14,11 +14,13 @@
 package engine
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 	"time"
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
+	docker "github.com/fsouza/go-dockerclient"
 	"github.com/golang/mock/gomock"
 )
 
@@ -27,36 +29,100 @@ func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
-		Image: "myContainerImage",
+		Name:  "testContainer",
+		Image: "testContainerImage",
 	}
 	sourceImage := &Image{
-		Name: container.Image,
+		ImageId: "sha256:qwerty",
 	}
 	sourceImageState := &ImageState{
-		Image:      sourceImage,
-		PulledTime: time.Now(),
+		Image:    sourceImage,
+		PulledAt: time.Now(),
 	}
-	imageManager.AddImageState(sourceImageState)
+	sourceImageState.addImageName(container.Image)
+	imageManager.(*dockerImageManager).addImageState(sourceImageState)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
 	err := imageManager.AddContainerReferenceToImageState(container)
 	if err != nil {
 		t.Error("Error in adding container to an existing image state")
 	}
-	imageState, ok := imageManager.(*dockerImageManager).getImageState(container)
+	imageState, ok := imageManager.(*dockerImageManager).getImageState(imageInspected.ID)
 	if !ok {
 		t.Error("Error in retrieving existing Image State for the Container")
 	}
 	if !reflect.DeepEqual(sourceImageState, imageState) {
 		t.Error("Mismatch between added and retrieved image state")
 	}
-
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
 	err = imageManager.RemoveContainerReferenceFromImageState(container)
 	if err != nil {
 		t.Error("Error removing container reference from image state")
 	}
-
-	imageState, _ = imageManager.(*dockerImageManager).getImageState(container)
+	imageState, _ = imageManager.(*dockerImageManager).getImageState(imageInspected.ID)
 	if len(imageState.Containers) != 0 {
 		t.Error("Error removing container reference from image state")
+	}
+}
+
+func TestAddContainerReferenceToImageStateInspectError(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImageState := &ImageState{
+		Image:    sourceImage,
+		PulledAt: time.Now(),
+	}
+	sourceImageState.addImageName(container.Image)
+	imageManager.(*dockerImageManager).addImageState(sourceImageState)
+	client.EXPECT().InspectImage(container.Image).Return(nil, errors.New("error inspecting")).AnyTimes()
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err == nil {
+		t.Error("Expected error in inspecting image while adding container to image state")
+	}
+}
+
+func TestAddContainerReferenceToImageStateWithNoImageName(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImageState := &ImageState{
+		Image:    sourceImage,
+		PulledAt: time.Now(),
+	}
+	imageManager.(*dockerImageManager).addImageState(sourceImageState)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+	imageState, ok := imageManager.(*dockerImageManager).getImageState(imageInspected.ID)
+	if !ok {
+		t.Error("Error in retrieving existing Image State for the Container")
+	}
+	for _, imageName := range imageState.Image.Names {
+		if imageName != container.Image {
+			t.Error("Error while adding image name to image state")
+		}
 	}
 }
 
@@ -69,7 +135,24 @@ func TestAddInvalidContainerReferenceToImageState(t *testing.T) {
 	}
 	err := imageManager.AddContainerReferenceToImageState(container)
 	if err == nil {
-		t.Error("Expected error adding invalid container reference to image state")
+		t.Error("Expected error adding container reference with no image name to image state")
+	}
+}
+
+func TestRemoveContainerReferenceFromInvalidImageState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Image: "myContainerImage",
+	}
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.RemoveContainerReferenceFromImageState(container)
+	if err == nil {
+		t.Error("Expected error while adding container to an invalid image state")
 	}
 }
 
@@ -82,25 +165,46 @@ func TestRemoveInvalidContainerReferenceFromImageState(t *testing.T) {
 	}
 	err := imageManager.RemoveContainerReferenceFromImageState(container)
 	if err == nil {
-		t.Error("Expected error removing invalid container reference from image state")
+		t.Error("Expected error removing container reference with no image name from image state")
 	}
 }
 
-func TestAddImageState(t *testing.T) {
+func TestRemoveContainerReferenceFromImageStateInspectError(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Image: "myContainerImage",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(nil, errors.New("error inspecting")).AnyTimes()
+	err := imageManager.RemoveContainerReferenceFromImageState(container)
+	if err == nil {
+		t.Error("Expected error in inspecting image while adding container to image state")
+	}
+}
+
+func TestRemoveContainerReferenceFromImageStateWithNoReference(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
 	sourceImage := &Image{
-		Name: "myImage",
+		ImageId: "sha256:qwerty",
 	}
 	sourceImageState := &ImageState{
-		Image:      sourceImage,
-		PulledTime: time.Now(),
+		Image:    sourceImage,
+		PulledAt: time.Now(),
 	}
-	imageManager.AddImageState(sourceImageState)
-	for _, imageState := range imageManager.(*dockerImageManager).getAllImageStates() {
-		if !reflect.DeepEqual(sourceImageState, imageState) {
-			t.Error("Error adding image state to image manager")
-		}
+	imageManager.(*dockerImageManager).addImageState(sourceImageState)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.RemoveContainerReferenceFromImageState(container)
+	if err == nil {
+		t.Error("Expected error removing non-existing container reference from image state")
 	}
 }
