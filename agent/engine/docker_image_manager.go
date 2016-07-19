@@ -1,6 +1,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -21,11 +22,12 @@ type ImageManager interface {
 
 // Image is the type representing a docker image and its various properties
 type Image struct {
-	ImageId string
-	Name    string
-	Repo    string
-	Tag     string
-	Size    int64
+	ImageId   string
+	Names     []string
+	Repos     []string
+	Tags      []string
+	Size      int64
+	imageLock sync.RWMutex
 }
 
 // ImageState is the type representing a docker image
@@ -35,9 +37,10 @@ type ImageState struct {
 	Containers   []*api.Container
 	PulledTime   time.Time
 	LastUsedTime time.Time
+	updateLock   sync.RWMutex
 }
 
-// DockerImageManager accounts all the images and their states in the instance.
+// dockerImageManager accounts all the images and their states in the instance.
 // It also has the cleanup policy configuration.
 type dockerImageManager struct {
 	imageStates []*ImageState
@@ -69,35 +72,47 @@ func (imageManager *dockerImageManager) getAllImageStates() []*ImageState {
 // AddContainerReferenceToImageState adds container reference to the corresponding imageState object
 func (imageManager *dockerImageManager) AddContainerReferenceToImageState(container *api.Container) error {
 	if container.Image == "" {
-		return fmt.Errorf("Invalid container reference")
+		return fmt.Errorf("Invalid container reference: Empty image name")
 	}
-	imageState, exist := imageManager.getImageState(container)
-	if exist {
+	imageState, ok := imageManager.getImageState(container)
+	if ok {
 		// Image State already exists; add Container to it
-		seelog.Infof("Adding container reference- %v to Image state- %v", container.Image, imageState.Image.Name)
+		seelog.Infof("Adding container reference- %v to Image state- %v", container.Name, imageState.Image.ImageId)
+		ok = imageManager.hasImageName(imageState, container.Image)
+		if !ok {
+			seelog.Infof("Adding image name- %v to Image state- %v", container.Image, imageState.Image.ImageId)
+			repository, tag := docker.ParseRepositoryTag(container.Image)
+			imageState.Image.imageLock.Lock()
+			defer imageState.Image.imageLock.Unlock()
+			imageState.Image.Names = append(imageState.Image.Names, container.Image)
+			imageState.Image.Repos = append(imageState.Image.Repos, repository)
+			imageState.Image.Tags = append(imageState.Image.Tags, tag)
+		}
+		imageState.updateLock.Lock()
+		defer imageState.updateLock.Unlock()
 		imageState.Containers = append(imageState.Containers, container)
 		return nil
 	}
 	// Inspect image for creating new Image Object
 	imageinspected, err := imageManager.client.InspectImage(container.Image)
 	if err != nil {
-		seelog.Debugf("Bad image: %v", container.Image)
+		seelog.Errorf("Error inspecting image: %v", err)
 		return err
 	}
 	repository, tag := docker.ParseRepositoryTag(container.Image)
 	var sourceImage *Image
 	sourceImage = &Image{
 		ImageId: imageinspected.ID,
-		Name:    container.Image,
-		Repo:    repository,
-		Tag:     tag,
 		Size:    imageinspected.Size,
 	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
+	sourceImage.Repos = append(sourceImage.Repos, repository)
+	sourceImage.Tags = append(sourceImage.Tags, tag)
 	sourceImageState := &ImageState{
 		Image:      sourceImage,
 		PulledTime: time.Now(),
 	}
-	seelog.Infof("Adding container reference- %v to Image state %v", container.Image, sourceImage.Name)
+	seelog.Infof("Adding container reference- %v to Image state %v", container.Name, sourceImage.ImageId)
 	sourceImageState.Containers = append(sourceImageState.Containers, container)
 	imageManager.AddImageState(sourceImageState)
 	return nil
@@ -106,31 +121,51 @@ func (imageManager *dockerImageManager) AddContainerReferenceToImageState(contai
 // RemoveContainerReferenceFromImageState removes container reference from the corresponding imageState object
 func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(container *api.Container) error {
 	if container.Image == "" {
-		return fmt.Errorf("Invalid container reference")
+		return fmt.Errorf("Invalid container reference: Empty image name")
 	}
-	// Find image states that this container is part of, and remove the reference
+	// Find image state that this container is part of, and remove the reference
 	imageState, ok := imageManager.getImageState(container)
-	if ok {
-		// Found matching ImageState
-		for i := len(imageState.Containers) - 1; i >= 0; i-- {
-			if imageState.Containers[i].Image == container.Image {
-				// Container reference found; hence remove it
-				seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Image, imageState.Image.Name)
-				imageState.Containers = append(imageState.Containers[:i], imageState.Containers[i+1:]...)
-				// Update the last used time for the image
-				imageState.LastUsedTime = time.Now()
-			}
+	if !ok {
+		return errors.New("Cannot find image state for the container to be removed")
+	}
+	// Found matching ImageState
+	for i := len(imageState.Containers) - 1; i >= 0; i-- {
+		if imageState.Containers[i].Name == container.Name {
+			// Container reference found; hence remove it
+			seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Name, imageState.Image.ImageId)
+			imageState.updateLock.Lock()
+			defer imageState.updateLock.Unlock()
+			imageState.Containers = append(imageState.Containers[:i], imageState.Containers[i+1:]...)
+			// Update the last used time for the image
+			imageState.LastUsedTime = time.Now()
+			return nil
 		}
 	}
-	return nil
+	return errors.New("Container reference is not found in the image state")
 }
 
 // getImageState returns the ImageState object that the container is referenced at
 func (imageManager *dockerImageManager) getImageState(container *api.Container) (*ImageState, bool) {
+	imageinspected, err := imageManager.client.InspectImage(container.Image)
+	if err != nil {
+		seelog.Errorf("Error inspecting image: %v", err)
+		return nil, false
+	}
 	for _, imageState := range imageManager.getAllImageStates() {
-		if imageState.Image.Name == container.Image {
+		if imageState.Image.ImageId == imageinspected.ID {
 			return imageState, true
 		}
 	}
 	return nil, false
+}
+
+func (imageManager *dockerImageManager) hasImageName(imageState *ImageState, containerImageName string) bool {
+	imageState.Image.imageLock.RLock()
+	defer imageState.Image.imageLock.RUnlock()
+	for _, imageName := range imageState.Image.Names {
+		if imageName == containerImageName {
+			return true
+		}
+	}
+	return false
 }

@@ -502,7 +502,7 @@ func TestSteadyStatePoll(t *testing.T) {
 }
 
 func TestStopWithPendingStops(t *testing.T) {
-	ctrl, client, testTime, taskEngine, _, imageManager := mocks(t, &defaultConfig)
+	ctrl, client, testTime, taskEngine, _, _ := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 	testTime.EXPECT().Now().AnyTimes()
 	testTime.EXPECT().After(gomock.Any()).AnyTimes()
@@ -536,7 +536,6 @@ func TestStopWithPendingStops(t *testing.T) {
 	client.EXPECT().PullImage(gomock.Any(), nil).Do(func(x, y interface{}) {
 		<-pulling
 	})
-	imageManager.EXPECT().AddContainerReferenceToImageState(gomock.Any())
 	taskEngine.AddTask(sleepTask2)
 	stopSleep2 := *sleepTask2
 	stopSleep2.DesiredStatus = api.TaskStopped
@@ -814,12 +813,11 @@ func TestCapabilitiesTaskIAMRoleForUnSupportedDockerVersion(t *testing.T) {
 func TestGetTaskByArn(t *testing.T) {
 	// Need a mock client as AddTask not only adds a task to the engine, but
 	// also causes the engine to progress the task.
-	ctrl, client, _, taskEngine, _, imageManager := mocks(t, &defaultConfig)
+	ctrl, client, _, taskEngine, _, _ := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 	eventStream := make(chan DockerContainerChangeEvent)
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	client.EXPECT().PullImage(gomock.Any(), gomock.Any()).AnyTimes() // TODO change to MaxTimes(1)
-	imageManager.EXPECT().AddContainerReferenceToImageState(gomock.Any())
 	err := taskEngine.Init()
 	if err != nil {
 		t.Fatal(err)

@@ -268,7 +268,10 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 		if err != nil {
 			log.Debug("Unable to remove old container", "err", err, "task", task, "cont", cont)
 		}
-		engine.imageManager.RemoveContainerReferenceFromImageState(cont)
+		err = engine.imageManager.RemoveContainerReferenceFromImageState(cont)
+		if err != nil {
+			seelog.Errorf("%v", err)
+		}
 	}
 }
 

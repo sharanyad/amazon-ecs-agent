@@ -324,7 +324,6 @@ func (dg *dockerGoClient) createScratchImageIfNotExists() error {
 func (dg *dockerGoClient) InspectImage(image string) (*docker.Image, error) {
 	client, err := dg.dockerClient()
 	if err != nil {
-		seelog.Infof("cannot create docker client")
 		return nil, err
 	}
 	return client.InspectImage(image)
