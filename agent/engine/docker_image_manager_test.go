@@ -26,6 +26,7 @@ import (
 
 func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -35,9 +36,10 @@ func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 	sourceImage := &Image{
 		ImageId: "sha256:qwerty",
 	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
 	sourceImageState := &ImageState{
 		Image:    sourceImage,
-		PulledAt: time.Now(),
+		PulledAt: time.Now().AddDate(0, -2, 0),
 	}
 	sourceImageState.addImageName(container.Image)
 	imageManager.(*dockerImageManager).addImageState(sourceImageState)
@@ -65,10 +67,20 @@ func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 	if len(imageState.Containers) != 0 {
 		t.Error("Error removing container reference from image state")
 	}
+
+	imageStateForDeletion := imageManager.(*dockerImageManager).getCandidateImagesForDeletion()
+	if !reflect.DeepEqual(imageStateForDeletion[0], sourceImageState) {
+		t.Error("Mismatch between added and retrieved image state for deletion")
+	}
+	leastRecentlyUsedImage := imageManager.(*dockerImageManager).getLeastRecentlyUsedImages(imageStateForDeletion)
+	if !reflect.DeepEqual(imageStateForDeletion[0], leastRecentlyUsedImage) {
+		t.Error("Mismatch between added and retrieved LRU image state for deletion")
+	}
 }
 
 func TestAddContainerReferenceToImageStateInspectError(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -93,6 +105,7 @@ func TestAddContainerReferenceToImageStateInspectError(t *testing.T) {
 
 func TestAddContainerReferenceToImageStateWithNoImageName(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -128,6 +141,7 @@ func TestAddContainerReferenceToImageStateWithNoImageName(t *testing.T) {
 
 func TestAddInvalidContainerReferenceToImageState(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -141,6 +155,7 @@ func TestAddInvalidContainerReferenceToImageState(t *testing.T) {
 
 func TestRemoveContainerReferenceFromInvalidImageState(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -158,6 +173,7 @@ func TestRemoveContainerReferenceFromInvalidImageState(t *testing.T) {
 
 func TestRemoveInvalidContainerReferenceFromImageState(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -171,6 +187,7 @@ func TestRemoveInvalidContainerReferenceFromImageState(t *testing.T) {
 
 func TestRemoveContainerReferenceFromImageStateInspectError(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -185,6 +202,7 @@ func TestRemoveContainerReferenceFromImageStateInspectError(t *testing.T) {
 
 func TestRemoveContainerReferenceFromImageStateWithNoReference(t *testing.T) {
 	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 	client := NewMockDockerClient(ctrl)
 	imageManager := NewImageManager(client)
 	container := &api.Container{
@@ -206,5 +224,177 @@ func TestRemoveContainerReferenceFromImageStateWithNoReference(t *testing.T) {
 	err := imageManager.RemoveContainerReferenceFromImageState(container)
 	if err == nil {
 		t.Error("Expected error removing non-existing container reference from image state")
+	}
+}
+
+func TestGetCandidateImagesForDeletionImageNoImageState(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	imageStates := imageManager.(*dockerImageManager).getCandidateImagesForDeletion()
+	if imageStates != nil {
+		t.Error("Expected no image state to be returned for deletion")
+	}
+}
+
+func TestGetCandidateImagesForDeletionImageJustPulled(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	sourceImage := &Image{}
+	sourceImageState := &ImageState{
+		Image:    sourceImage,
+		PulledAt: time.Now(),
+	}
+	imageManager.(*dockerImageManager).addImageState(sourceImageState)
+	imageStates := imageManager.(*dockerImageManager).getCandidateImagesForDeletion()
+	if len(imageStates) > 0 {
+		t.Error("Expected no image state to be returned for deletion")
+	}
+}
+
+func TestGetCandidateImagesForDeletionImageHasContainerReference(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
+	sourceImageState := &ImageState{
+		Image:    sourceImage,
+		PulledAt: time.Now().AddDate(0, -2, 0),
+	}
+	imageManager.(*dockerImageManager).addImageState(sourceImageState)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+	imageStates := imageManager.(*dockerImageManager).getCandidateImagesForDeletion()
+	if len(imageStates) > 0 {
+		t.Error("Expected no image state to be returned for deletion")
+	}
+}
+
+func TestGetCandidateImagesForDeletionImageHasMoreContainerReferences(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	container2 := &api.Container{
+		Name:  "testContainer2",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
+	sourceImageState := &ImageState{
+		Image:    sourceImage,
+		PulledAt: time.Now().AddDate(0, -2, 0),
+	}
+	imageManager.(*dockerImageManager).addImageState(sourceImageState)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err = imageManager.AddContainerReferenceToImageState(container2)
+	if err != nil {
+		t.Error("Error in adding container2 to an existing image state")
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err = imageManager.RemoveContainerReferenceFromImageState(container)
+	if err != nil {
+		t.Error("Error removing container reference from image state")
+	}
+	imageStates := imageManager.(*dockerImageManager).getCandidateImagesForDeletion()
+	if len(imageStates) > 0 {
+		t.Error("Expected no image state to be returned for deletion")
+	}
+}
+
+func TestGetLeastRecentlyUsedImages(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	imageStateA := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -5, 0),
+	}
+	imageStateB := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -3, 0),
+	}
+	imageStateC := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -2, 0),
+	}
+	imageStateD := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -6, 0),
+	}
+	imageStateE := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -4, 0),
+	}
+	imageStateF := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -1, 0),
+	}
+
+	candidateImagesForDeletion := []*ImageState{
+		imageStateA, imageStateB, imageStateC, imageStateD, imageStateE, imageStateF,
+	}
+	expectedLeastRecentlyUsedImages := []*ImageState{
+		imageStateD, imageStateA, imageStateE, imageStateB, imageStateC,
+	}
+	leastRecentlyUsedImages := imageManager.(*dockerImageManager).getLeastRecentlyUsedImages(candidateImagesForDeletion)
+	for i := range leastRecentlyUsedImages {
+		if !reflect.DeepEqual(leastRecentlyUsedImages[i], expectedLeastRecentlyUsedImages[i]) {
+			t.Error("Incorrect order of least recently used images")
+		}
+	}
+}
+
+func TestGetLeastRecentlyUsedImagesLessThanFive(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	imageStateA := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -5, 0),
+	}
+	imageStateB := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -3, 0),
+	}
+	imageStateC := &ImageState{
+		LastUsedAt: time.Now().AddDate(0, -2, 0),
+	}
+	candidateImagesForDeletion := []*ImageState{
+		imageStateA, imageStateB, imageStateC,
+	}
+	expectedLeastRecentlyUsedImages := []*ImageState{
+		imageStateA, imageStateB, imageStateC,
+	}
+	leastRecentlyUsedImages := imageManager.(*dockerImageManager).getLeastRecentlyUsedImages(candidateImagesForDeletion)
+	for i := range leastRecentlyUsedImages {
+		if !reflect.DeepEqual(leastRecentlyUsedImages[i], expectedLeastRecentlyUsedImages[i]) {
+			t.Error("Incorrect order of least recently used images")
+		}
 	}
 }
