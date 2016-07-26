@@ -223,6 +223,9 @@ func _main() int {
 	taskEngine.SetSaver(stateManager)
 	taskEngine.MustInit()
 
+	// start of the periodic image cleanup process
+	go imageManager.StartImageCleanupProcess(ctx)
+
 	go sighandlers.StartTerminationHandler(stateManager, taskEngine)
 
 	// Agent introspection api

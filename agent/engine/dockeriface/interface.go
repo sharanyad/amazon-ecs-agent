@@ -34,4 +34,5 @@ type Client interface {
 	StopContainer(id string, timeout uint) error
 	Stats(opts docker.StatsOptions) error
 	Version() (*docker.Env, error)
+	RemoveImage(imageName string) error
 }

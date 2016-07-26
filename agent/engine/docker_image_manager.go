@@ -21,11 +21,13 @@ import (
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	"github.com/cihub/seelog"
+	"golang.org/x/net/context"
 )
 
 const (
 	numImagesToDelete        = 5
 	minimumAgeBeforeDeletion = 1 * time.Hour
+	imageCleanupTimeInterval = 3 * time.Hour
 )
 
 // ImageManager is responsible for saving the Image states,
@@ -33,6 +35,7 @@ const (
 type ImageManager interface {
 	AddContainerReferenceToImageState(container *api.Container) error
 	RemoveContainerReferenceFromImageState(container *api.Container) error
+	StartImageCleanupProcess(ctx context.Context)
 }
 
 // Image represents a docker image and its various properties
@@ -40,8 +43,6 @@ type Image struct {
 	ImageId string
 	Names   []string
 	Size    int64
-	// TODO: fine grained locking for appending/retrieving image names in corresponding images
-	// imageLock sync.RWMutex
 }
 
 // ImageState represents a docker image
@@ -51,19 +52,16 @@ type ImageState struct {
 	Containers []*api.Container
 	PulledAt   time.Time
 	LastUsedAt time.Time
-	// TODO: fine grained locking for updating/retrieving container references in image states
-	// containerLock sync.RWMutex
 }
 
 // dockerImageManager accounts all the images and their states in the instance.
 // It also has the cleanup policy configuration.
 type dockerImageManager struct {
 	imageStates []*ImageState
-	// TODO: fine grained locking for updating/retrieving image states in docker image manager
-	// imageStateLock sync.RWMutex
-	client DockerClient
+	client      DockerClient
 	// coarse grained lock for updating container references as part of image states
-	updateLock sync.RWMutex
+	updateLock         sync.RWMutex
+	imageCleanupTicker *time.Ticker
 }
 
 // ImageStatesForDeletion is used for implementing the sort interface
@@ -77,17 +75,23 @@ func NewImageManager(client DockerClient) ImageManager {
 
 // addImageState appends the imageState to list of imageState objects in ImageManager
 func (imageManager *dockerImageManager) addImageState(imageState *ImageState) {
-	// TODO: fine grained locking for appending image state to image manager
-	// imageManager.imageStateLock.Lock()
-	// defer imageManager.imageStateLock.Unlock()
 	imageManager.imageStates = append(imageManager.imageStates, imageState)
+}
+
+// removeImageState removes the imageState from the list of imageState objects in ImageManager
+func (imageManager *dockerImageManager) removeImageState(imageStateToBeRemoved *ImageState) {
+	for i, imageState := range imageManager.imageStates {
+		if imageState.Image.ImageId == imageStateToBeRemoved.Image.ImageId {
+			// Image State found; hence remove it
+			seelog.Infof("Removing Image State: %v from Image Manager", imageState.Image.ImageId)
+			imageManager.imageStates = append(imageManager.imageStates[:i], imageManager.imageStates[i+1:]...)
+			return
+		}
+	}
 }
 
 // getAllImageStates returns the list of imageStates in the instance
 func (imageManager *dockerImageManager) getAllImageStates() []*ImageState {
-	// TODO: fine grained locking for retrieving image states from image manager
-	// imageManager.imageStateLock.RLock()
-	// defer imageManager.imageStateLock.RUnlock()
 	return imageManager.imageStates
 }
 
@@ -154,9 +158,6 @@ func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(c
 		return fmt.Errorf("Cannot find image state for the container to be removed")
 	}
 	// Found matching ImageState
-	// TODO: fine grained locking for retrieving container references in an image state
-	// imageState.containerLock.Lock()
-	// defer imageState.containerLock.Unlock()
 	for i, _ := range imageState.Containers {
 		if imageState.Containers[i].Name == container.Name {
 			// Container reference found; hence remove it
@@ -181,9 +182,6 @@ func (imageManager *dockerImageManager) getImageState(containerImageID string) (
 }
 
 func (imageState *ImageState) hasImageName(containerImageName string) bool {
-	// TODO: fine grained locking for retrieving image names from the image state
-	// imageState.Image.imageLock.RLock()
-	// defer imageState.Image.imageLock.RUnlock()
 	for _, imageName := range imageState.Image.Names {
 		if imageName == containerImageName {
 			return true
@@ -193,21 +191,14 @@ func (imageState *ImageState) hasImageName(containerImageName string) bool {
 }
 
 func (imageState *ImageState) updateContainerReference(container *api.Container) {
-	// TODO: fine grained locking for appending container reference to image state
-	// imageState.containerLock.Lock()
-	// defer imageState.containerLock.Unlock()
 	imageState.Containers = append(imageState.Containers, container)
 }
 
 func (imageState *ImageState) addImageName(imageName string) {
-	// TODO: fine grained locking for adding image name to the image state
-	// imageState.Image.imageLock.Lock()
-	// defer imageState.Image.imageLock.Unlock()
 	imageState.Image.Names = append(imageState.Image.Names, imageName)
 }
 
 func (imageManager *dockerImageManager) getCandidateImagesForDeletion() []*ImageState {
-	// TODO: Lock to be used for imageStates variable
 	imageStates := imageManager.getAllImageStates()
 	if len(imageStates) < 1 {
 		// no image states present in image manager
@@ -229,7 +220,6 @@ func (imageManager *dockerImageManager) isImageOldEnough(imageState *ImageState)
 }
 
 func (imageState *ImageState) hasNoAssociatedContainers() bool {
-	// TODO: fine grained locking for retrieving container references in the image state
 	return len(imageState.Containers) == 0
 }
 
@@ -265,9 +255,6 @@ func (imageManager *dockerImageManager) getLeastRecentlyUsedImages(imagesForDele
 
 func (imageManager *dockerImageManager) removeExistingImageNameOfDifferentID(containerImageName string, inspectedImageID string) {
 	for _, imageState := range imageManager.getAllImageStates() {
-		// TODO: fine grained locking for retrieving image names from the image state
-		// imageState.Image.imageLock.RLock()
-		// defer imageState.Image.imageLock.RUnlock()
 		for i, _ := range imageState.Image.Names {
 			if imageState.Image.Names[i] == containerImageName && imageState.Image.ImageId != inspectedImageID {
 				// image with same name pulled in the instance. Untag the already existing image name
@@ -275,6 +262,77 @@ func (imageManager *dockerImageManager) removeExistingImageNameOfDifferentID(con
 				imageState.Image.Names = append(imageState.Image.Names[:i], imageState.Image.Names[i+1:]...)
 				return
 			}
+		}
+	}
+}
+
+func (imageManager *dockerImageManager) StartImageCleanupProcess(ctx context.Context) {
+	// passing the cleanup interval as argument which would help during testing
+	imageManager.performPeriodicImageCleanup(ctx, imageCleanupTimeInterval)
+}
+
+func (imageManager *dockerImageManager) performPeriodicImageCleanup(ctx context.Context, imageCleanupInterval time.Duration) {
+	imageManager.imageCleanupTicker = time.NewTicker(imageCleanupInterval)
+	for {
+		select {
+		case <-imageManager.imageCleanupTicker.C:
+			go imageManager.removeUnusedImages()
+		case <-ctx.Done():
+			imageManager.imageCleanupTicker.Stop()
+			return
+		}
+	}
+}
+
+func (imageManager *dockerImageManager) removeUnusedImages() {
+	// coarse grained lock for not letting other events change the Image Manager while cleanup
+	imageManager.updateLock.Lock()
+	defer imageManager.updateLock.Unlock()
+	candidateImageStatesForDeletion := imageManager.getCandidateImagesForDeletion()
+	if len(candidateImageStatesForDeletion) < 1 {
+		seelog.Infof("No eligible images for deletion for this cleanup cycle")
+		return
+	}
+	leastRecentlyUsedImages := imageManager.getLeastRecentlyUsedImages(candidateImageStatesForDeletion)
+	imageManager.removeLRUImages(leastRecentlyUsedImages)
+}
+
+func (imageManager *dockerImageManager) removeLRUImages(leastRecentlyUsedImages []*ImageState) {
+	if len(leastRecentlyUsedImages) < 1 {
+		seelog.Infof("No LRU images returned for deletion")
+		return
+	}
+	for _, leastRecentlyUsedImage := range leastRecentlyUsedImages {
+		if len(leastRecentlyUsedImage.Image.Names) == 0 {
+			// potentially untagged image of format <none>:<none>; remove by ID
+			imageManager.deleteImage(leastRecentlyUsedImage.Image.ImageId, leastRecentlyUsedImage)
+		} else {
+			// Image has multiple tags/repos. Untag each name and delete the final reference to image
+			imageNames := leastRecentlyUsedImage.Image.Names
+			for _, imageName := range imageNames {
+				imageManager.deleteImage(imageName, leastRecentlyUsedImage)
+			}
+		}
+	}
+}
+
+func (imageManager *dockerImageManager) deleteImage(imageIdentity string, imageState *ImageState) {
+	err := imageManager.client.RemoveImage(imageIdentity)
+	if err != nil {
+		seelog.Errorf("Error removing Image %v - %v", imageIdentity, err)
+		return
+	}
+	seelog.Infof("Image removed: %v", imageIdentity)
+	imageManager.removeImageName(imageIdentity, imageState)
+	if len(imageState.Image.Names) == 0 {
+		imageManager.removeImageState(imageState)
+	}
+}
+
+func (imageManager *dockerImageManager) removeImageName(containerImageName string, imageState *ImageState) {
+	for i, imageName := range imageState.Image.Names {
+		if imageName == containerImageName {
+			imageState.Image.Names = append(imageState.Image.Names[:i], imageState.Image.Names[i+1:]...)
 		}
 	}
 }

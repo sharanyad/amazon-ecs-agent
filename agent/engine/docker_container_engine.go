@@ -49,6 +49,7 @@ const (
 	removeContainerTimeout  = 5 * time.Minute
 	inspectContainerTimeout = 30 * time.Second
 	listContainersTimeout   = 10 * time.Minute
+	removeImageTimeout      = 15 * time.Minute
 
 	// dockerPullBeginTimeout is the timeout from when a 'pull' is called to when
 	// we expect to see output on the pull progress stream. This is to work
@@ -83,6 +84,7 @@ type DockerClient interface {
 
 	Version() (string, error)
 	InspectImage(string) (*docker.Image, error)
+	RemoveImage(string) error
 }
 
 // DockerGoClient wraps the underlying go-dockerclient library.
@@ -746,4 +748,25 @@ func (dg *dockerGoClient) Stats(id string, ctx context.Context) (<-chan *docker.
 	}()
 
 	return stats, nil
+}
+
+func (dg *dockerGoClient) RemoveImage(imageName string) error {
+	timeout := dg.time().After(removeImageTimeout)
+
+	response := make(chan error, 1)
+	go func() { response <- dg.removeImage(imageName) }()
+	select {
+	case resp := <-response:
+		return resp
+	case <-timeout:
+		return &DockerTimeoutError{removeImageTimeout, "removing image"}
+	}
+}
+
+func (dg *dockerGoClient) removeImage(imageName string) error {
+	client, err := dg.dockerClient()
+	if err != nil {
+		return err
+	}
+	return client.RemoveImage(imageName)
 }

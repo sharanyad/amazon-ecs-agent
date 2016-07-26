@@ -74,7 +74,6 @@ func TestBatchContainerHappyPath(t *testing.T) {
 	var createdContainerName string
 	for _, container := range sleepTask.Containers {
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
-
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		// Container config should get updated with this during PostUnmarshalTask
@@ -331,7 +330,6 @@ func TestStartTimeoutThenStart(t *testing.T) {
 
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	for _, container := range sleepTask.Containers {
-
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
@@ -422,7 +420,6 @@ func TestSteadyStatePoll(t *testing.T) {
 
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	for _, container := range sleepTask.Containers {
-
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
@@ -637,7 +634,6 @@ func TestTaskTransitionWhenStopContainerTimesout(t *testing.T) {
 	mockTime.EXPECT().After(gomock.Any()).AnyTimes()
 	containerStopTimeoutError := DockerContainerMetadata{Error: &DockerTimeoutError{transition: "stop", duration: stopContainerTimeout}}
 	for _, container := range sleepTask.Containers {
-
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
