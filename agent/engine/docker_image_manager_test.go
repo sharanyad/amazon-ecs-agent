@@ -36,7 +36,6 @@ func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 	sourceImage := &Image{
 		ImageId: "sha256:qwerty",
 	}
-	sourceImage.Names = append(sourceImage.Names, container.Image)
 	sourceImageState := &ImageState{
 		Image:    sourceImage,
 		PulledAt: time.Now().AddDate(0, -2, 0),
@@ -46,7 +45,7 @@ func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 	imageInspected := &docker.Image{
 		ID: "sha256:qwerty",
 	}
-	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil)
 	err := imageManager.AddContainerReferenceToImageState(container)
 	if err != nil {
 		t.Error("Error in adding container to an existing image state")
@@ -58,7 +57,7 @@ func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 	if !reflect.DeepEqual(sourceImageState, imageState) {
 		t.Error("Mismatch between added and retrieved image state")
 	}
-	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil)
 	err = imageManager.RemoveContainerReferenceFromImageState(container)
 	if err != nil {
 		t.Error("Error removing container reference from image state")
@@ -73,7 +72,7 @@ func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
 		t.Error("Mismatch between added and retrieved image state for deletion")
 	}
 	leastRecentlyUsedImage := imageManager.(*dockerImageManager).getLeastRecentlyUsedImages(imageStateForDeletion)
-	if !reflect.DeepEqual(imageStateForDeletion[0], leastRecentlyUsedImage) {
+	if !reflect.DeepEqual(imageStateForDeletion[0], leastRecentlyUsedImage[0]) {
 		t.Error("Mismatch between added and retrieved LRU image state for deletion")
 	}
 }
@@ -396,5 +395,47 @@ func TestGetLeastRecentlyUsedImagesLessThanFive(t *testing.T) {
 		if !reflect.DeepEqual(leastRecentlyUsedImages[i], expectedLeastRecentlyUsedImages[i]) {
 			t.Error("Incorrect order of least recently used images")
 		}
+	}
+}
+
+func TestRemoveAlreadyExistingImageNameWithDifferentID(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil)
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+	container1 := &api.Container{
+		Name:  "testContainer1",
+		Image: "testContainerImage",
+	}
+	imageInspected1 := &docker.Image{
+		ID: "sha256:asdfg",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected1, nil)
+	err = imageManager.AddContainerReferenceToImageState(container1)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+	imageState, ok := imageManager.(*dockerImageManager).getImageState(imageInspected.ID)
+	if !ok {
+		t.Error("Error in retrieving existing Image State for the Container")
+	}
+	if len(imageState.Image.Names) != 0 {
+		t.Error("Error in removing already existing image name with different ID")
 	}
 }

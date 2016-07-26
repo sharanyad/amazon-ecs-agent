@@ -105,8 +105,8 @@ func (imageManager *dockerImageManager) AddContainerReferenceToImageState(contai
 		return err
 	}
 
+	imageManager.removeExistingImageNameOfDifferentID(container.Image, imageInspected.ID)
 	imageState, ok := imageManager.getImageState(imageInspected.ID)
-
 	if ok {
 		// Image State already exists; add Container to it
 		exists := imageState.hasImageName(container.Image)
@@ -261,4 +261,20 @@ func (imageManager *dockerImageManager) getLeastRecentlyUsedImages(imagesForDele
 		return lruImages
 	}
 	return lruImages[:numImagesToDelete]
+}
+
+func (imageManager *dockerImageManager) removeExistingImageNameOfDifferentID(containerImageName string, inspectedImageID string) {
+	for _, imageState := range imageManager.getAllImageStates() {
+		// TODO: fine grained locking for retrieving image names from the image state
+		// imageState.Image.imageLock.RLock()
+		// defer imageState.Image.imageLock.RUnlock()
+		for i, _ := range imageState.Image.Names {
+			if imageState.Image.Names[i] == containerImageName && imageState.Image.ImageId != inspectedImageID {
+				// image with same name pulled in the instance. Untag the already existing image name
+				seelog.Infof("Removing Image Name: %v from Image- %v", containerImageName, imageState.Image.ImageId)
+				imageState.Image.Names = append(imageState.Image.Names[:i], imageState.Image.Names[i+1:]...)
+				return
+			}
+		}
+	}
 }
