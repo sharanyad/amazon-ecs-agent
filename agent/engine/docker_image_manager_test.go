@@ -22,6 +22,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	docker "github.com/fsouza/go-dockerclient"
 	"github.com/golang/mock/gomock"
+	"golang.org/x/net/context"
 )
 
 func TestAddAndRemoveContainerToImageStateReferenceHappyPath(t *testing.T) {
@@ -437,5 +438,135 @@ func TestRemoveAlreadyExistingImageNameWithDifferentID(t *testing.T) {
 	}
 	if len(imageState.Image.Names) != 0 {
 		t.Error("Error in removing already existing image name with different ID")
+	}
+}
+
+func TestImageCleanupHappyPath(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+
+	err = imageManager.RemoveContainerReferenceFromImageState(container)
+	if err != nil {
+		t.Error("Error removing container reference from image state")
+	}
+
+	imageState, _ := imageManager.(*dockerImageManager).getImageState(imageInspected.ID)
+	imageState.PulledAt = time.Now().AddDate(0, -2, 0)
+	imageState.LastUsedAt = time.Now().AddDate(0, -2, 0)
+
+	ctx := context.Background()
+	client.EXPECT().RemoveImage(container.Image).Return(nil)
+	go imageManager.(*dockerImageManager).performPeriodicImageCleanup(ctx, 30*time.Second)
+	time.Sleep(45 * time.Second)
+	ctx.Done()
+	if len(imageState.Image.Names) != 0 {
+		t.Error("Error removing image name from state after the image is removed")
+	}
+	if len(imageManager.(*dockerImageManager).imageStates) != 0 {
+		t.Error("Error removing image state after the image is removed")
+	}
+}
+
+func TestImageCleanupCannotRemoveImage(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+
+	err = imageManager.RemoveContainerReferenceFromImageState(container)
+	if err != nil {
+		t.Error("Error removing container reference from image state")
+	}
+
+	imageState, _ := imageManager.(*dockerImageManager).getImageState(imageInspected.ID)
+	imageState.PulledAt = time.Now().AddDate(0, -2, 0)
+	imageState.LastUsedAt = time.Now().AddDate(0, -2, 0)
+
+	ctx := context.Background()
+	client.EXPECT().RemoveImage(container.Image).Return(errors.New("error removing image"))
+	go imageManager.(*dockerImageManager).performPeriodicImageCleanup(ctx, 30*time.Second)
+	time.Sleep(45 * time.Second)
+	ctx.Done()
+	if len(imageState.Image.Names) == 0 {
+		t.Error("Error: image name should not be removed")
+	}
+	if len(imageManager.(*dockerImageManager).imageStates) == 0 {
+		t.Error("Error: image state should not be removed")
+	}
+}
+
+func TestImageCleanupRemoveImageById(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	client := NewMockDockerClient(ctrl)
+	imageManager := NewImageManager(client)
+	container := &api.Container{
+		Name:  "testContainer",
+		Image: "testContainerImage",
+	}
+	sourceImage := &Image{
+		ImageId: "sha256:qwerty",
+	}
+	sourceImage.Names = append(sourceImage.Names, container.Image)
+	imageInspected := &docker.Image{
+		ID: "sha256:qwerty",
+	}
+	client.EXPECT().InspectImage(container.Image).Return(imageInspected, nil).AnyTimes()
+	err := imageManager.AddContainerReferenceToImageState(container)
+	if err != nil {
+		t.Error("Error in adding container to an existing image state")
+	}
+
+	err = imageManager.RemoveContainerReferenceFromImageState(container)
+	if err != nil {
+		t.Error("Error removing container reference from image state")
+	}
+
+	imageState, _ := imageManager.(*dockerImageManager).getImageState(imageInspected.ID)
+	imageManager.(*dockerImageManager).removeImageName(container.Image, imageState)
+	imageState.PulledAt = time.Now().AddDate(0, -2, 0)
+	imageState.LastUsedAt = time.Now().AddDate(0, -2, 0)
+
+	ctx := context.Background()
+	client.EXPECT().RemoveImage(sourceImage.ImageId).Return(nil)
+	go imageManager.(*dockerImageManager).performPeriodicImageCleanup(ctx, 30*time.Second)
+	time.Sleep(45 * time.Second)
+	ctx.Done()
+	if len(imageManager.(*dockerImageManager).imageStates) != 0 {
+		t.Error("Error removing image state after the image is removed")
 	}
 }

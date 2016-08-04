@@ -877,3 +877,35 @@ func TestStatsClientError(t *testing.T) {
 		t.Fatal("Expected error with nil docker client")
 	}
 }
+
+func TestRemoveImageTimeout(t *testing.T) {
+	mockDocker, client, testTime, done := dockerclientSetup(t)
+	defer done()
+
+	warp := make(chan time.Time)
+	testTime.EXPECT().After(removeImageTimeout).Return(warp)
+	wait := &sync.WaitGroup{}
+	wait.Add(1)
+	mockDocker.EXPECT().RemoveImage("image").Do(func(x interface{}) {
+		warp <- time.Now()
+		wait.Wait()
+		// Don't return, verify timeout happens
+	})
+	err := client.RemoveImage("image")
+	if err == nil {
+		t.Error("Expected error for remove image timeout")
+	}
+	wait.Done()
+}
+
+func TestRemoveImage(t *testing.T) {
+	mockDocker, client, testTime, done := dockerclientSetup(t)
+	defer done()
+
+	testTime.EXPECT().After(gomock.Any()).AnyTimes()
+	mockDocker.EXPECT().RemoveImage("image").Return(nil)
+	err := client.RemoveImage("image")
+	if err != nil {
+		t.Error("Did not expect error")
+	}
+}
