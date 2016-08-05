@@ -438,9 +438,8 @@ func (engine *DockerTaskEngine) GetTaskByArn(arn string) (*api.Task, bool) {
 
 func (engine *DockerTaskEngine) pullContainer(task *api.Task, container *api.Container) DockerContainerMetadata {
 	log.Info("Pulling container", "task", task, "container", container)
-	imageManager := engine.imageManager
 	metadata := engine.client.PullImage(container.Image, container.RegistryAuthentication)
-	err := imageManager.AddContainerReferenceToImageState(container)
+	err := engine.imageManager.AddContainerReferenceToImageState(container)
 	if err != nil {
 		seelog.Errorf("Error adding container reference to image state: %v", err)
 	}

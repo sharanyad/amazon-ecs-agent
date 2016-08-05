@@ -473,7 +473,7 @@ func TestImageCleanupHappyPath(t *testing.T) {
 	imageState.LastUsedAt = time.Now().AddDate(0, -2, 0)
 
 	ctx := context.Background()
-	client.EXPECT().RemoveImage(container.Image).Return(nil)
+	client.EXPECT().RemoveImage(container.Image, removeImageTimeout).Return(nil)
 	go imageManager.(*dockerImageManager).performPeriodicImageCleanup(ctx, 30*time.Second)
 	time.Sleep(45 * time.Second)
 	ctx.Done()
@@ -516,11 +516,8 @@ func TestImageCleanupCannotRemoveImage(t *testing.T) {
 	imageState.PulledAt = time.Now().AddDate(0, -2, 0)
 	imageState.LastUsedAt = time.Now().AddDate(0, -2, 0)
 
-	ctx := context.Background()
-	client.EXPECT().RemoveImage(container.Image).Return(errors.New("error removing image"))
-	go imageManager.(*dockerImageManager).performPeriodicImageCleanup(ctx, 30*time.Second)
-	time.Sleep(45 * time.Second)
-	ctx.Done()
+	client.EXPECT().RemoveImage(container.Image, removeImageTimeout).Return(errors.New("error removing image"))
+	imageManager.(*dockerImageManager).removeUnusedImages()
 	if len(imageState.Image.Names) == 0 {
 		t.Error("Error: image name should not be removed")
 	}
@@ -561,11 +558,8 @@ func TestImageCleanupRemoveImageById(t *testing.T) {
 	imageState.PulledAt = time.Now().AddDate(0, -2, 0)
 	imageState.LastUsedAt = time.Now().AddDate(0, -2, 0)
 
-	ctx := context.Background()
-	client.EXPECT().RemoveImage(sourceImage.ImageId).Return(nil)
-	go imageManager.(*dockerImageManager).performPeriodicImageCleanup(ctx, 30*time.Second)
-	time.Sleep(45 * time.Second)
-	ctx.Done()
+	client.EXPECT().RemoveImage(sourceImage.ImageId, removeImageTimeout).Return(nil)
+	imageManager.(*dockerImageManager).removeUnusedImages()
 	if len(imageManager.(*dockerImageManager).imageStates) != 0 {
 		t.Error("Error removing image state after the image is removed")
 	}
