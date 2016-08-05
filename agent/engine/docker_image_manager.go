@@ -25,9 +25,10 @@ import (
 )
 
 const (
-	numImagesToDelete        = 5
-	minimumAgeBeforeDeletion = 1 * time.Hour
-	imageCleanupTimeInterval = 3 * time.Hour
+	numImagesToDelete             = 5
+	minimumAgeBeforeDeletion      = 1 * time.Hour
+	imageCleanupTimeInterval      = 3 * time.Hour
+	imageNotFoundForDeletionError = "no such image"
 )
 
 // ImageManager is responsible for saving the Image states,
@@ -294,12 +295,12 @@ func (imageManager *dockerImageManager) removeUnusedImages() {
 		return
 	}
 	leastRecentlyUsedImages := imageManager.getLeastRecentlyUsedImages(candidateImageStatesForDeletion)
-	imageManager.removeLRUImages(leastRecentlyUsedImages)
+	imageManager.removeImages(leastRecentlyUsedImages)
 }
 
-func (imageManager *dockerImageManager) removeLRUImages(leastRecentlyUsedImages []*ImageState) {
+func (imageManager *dockerImageManager) removeImages(leastRecentlyUsedImages []*ImageState) {
 	if len(leastRecentlyUsedImages) < 1 {
-		seelog.Infof("No LRU images returned for deletion")
+		seelog.Infof("No images returned for deletion")
 		return
 	}
 	for _, leastRecentlyUsedImage := range leastRecentlyUsedImages {
@@ -317,10 +318,14 @@ func (imageManager *dockerImageManager) removeLRUImages(leastRecentlyUsedImages 
 }
 
 func (imageManager *dockerImageManager) deleteImage(imageIdentity string, imageState *ImageState) {
-	err := imageManager.client.RemoveImage(imageIdentity)
+	err := imageManager.client.RemoveImage(imageIdentity, removeImageTimeout)
 	if err != nil {
-		seelog.Errorf("Error removing Image %v - %v", imageIdentity, err)
-		return
+		if err.Error() == imageNotFoundForDeletionError {
+			seelog.Errorf("Image already removed from the instance")
+		} else {
+			seelog.Errorf("Error removing Image %v - %v", imageIdentity, err)
+			return
+		}
 	}
 	seelog.Infof("Image removed: %v", imageIdentity)
 	imageManager.removeImageName(imageIdentity, imageState)
