@@ -191,6 +191,10 @@ func (engine *DockerTaskEngine) Disable() {
 func (engine *DockerTaskEngine) synchronizeState() {
 	engine.processTasks.Lock()
 	defer engine.processTasks.Unlock()
+	imageStates := engine.state.AllImageStates()
+	if len(imageStates) != 0 {
+		engine.imageManager.AddAllImageStates(imageStates)
+	}
 
 	tasks := engine.state.AllTasks()
 	for _, task := range tasks {
@@ -210,6 +214,7 @@ func (engine *DockerTaskEngine) synchronizeState() {
 					cont.DockerId = describedCont.ID
 					// update mappings that need dockerid
 					engine.state.AddContainer(cont, task)
+					engine.imageManager.AddContainerReferenceToImageState(cont.Container)
 				}
 			}
 			if cont.DockerId != "" {
@@ -219,7 +224,10 @@ func (engine *DockerTaskEngine) synchronizeState() {
 					if !cont.Container.KnownTerminal() {
 						cont.Container.ApplyingError = api.NewNamedError(&ContainerVanishedError{})
 						log.Warn("Could not describe previously known container; assuming dead", "err", metadata.Error, "id", cont.DockerId, "name", cont.DockerName)
+						engine.imageManager.RemoveContainerReferenceFromImageState(cont.Container)
 					}
+				} else {
+					engine.imageManager.AddContainerReferenceToImageState(cont.Container)
 				}
 				if currentState > cont.Container.KnownStatus {
 					cont.Container.KnownStatus = currentState
@@ -273,6 +281,7 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 			seelog.Errorf("Error removing container reference from image state: %v", err)
 		}
 	}
+	engine.saver.Save()
 }
 
 func (engine *DockerTaskEngine) emitTaskEvent(task *api.Task, reason string) {
@@ -443,6 +452,9 @@ func (engine *DockerTaskEngine) pullContainer(task *api.Task, container *api.Con
 	if err != nil {
 		seelog.Errorf("Error adding container reference to image state: %v", err)
 	}
+	imageState := engine.imageManager.GetImageStateFromImageName(container.Image)
+	engine.state.AddImageState(imageState)
+	engine.saver.Save()
 	return metadata
 }
 

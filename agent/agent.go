@@ -27,6 +27,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
+	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	"github.com/aws/amazon-ecs-agent/agent/eventhandler"
 	"github.com/aws/amazon-ecs-agent/agent/handlers"
 	credentialshandler "github.com/aws/amazon-ecs-agent/agent/handlers/credentials"
@@ -101,7 +102,7 @@ func _main() int {
 	// the credentials handler
 	credentialsManager := credentials.NewManager()
 	// Create image manager. This will be used by the task engine for saving image states
-	imageManager := engine.NewImageManager(dockerClient)
+	imageManager := engine.NewImageManager(dockerClient, dockerstate.NewDockerTaskEngineState())
 	if *versionFlag {
 		versionableEngine := engine.NewTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 		version.PrintVersion(versionableEngine)
@@ -223,6 +224,7 @@ func _main() int {
 	taskEngine.SetSaver(stateManager)
 	taskEngine.MustInit()
 
+	imageManager.SetSaver(stateManager)
 	// start of the periodic image cleanup process
 	go imageManager.StartImageCleanupProcess(ctx)
 

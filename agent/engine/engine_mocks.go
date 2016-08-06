@@ -21,6 +21,7 @@ import (
 
 	api "github.com/aws/amazon-ecs-agent/agent/api"
 	dockerclient "github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
+	image "github.com/aws/amazon-ecs-agent/agent/engine/image"
 	statemanager "github.com/aws/amazon-ecs-agent/agent/statemanager"
 	go_dockerclient "github.com/fsouza/go-dockerclient"
 	gomock "github.com/golang/mock/gomock"
@@ -385,10 +386,28 @@ func (_mr *_MockImageManagerRecorder) RemoveContainerReferenceFromImageState(arg
 	return _mr.mock.ctrl.RecordCall(_mr.mock, "RemoveContainerReferenceFromImageState", arg0)
 }
 
-func (_m *MockImageManager) StartImageCleanupProcess(_param0 context.Context) {
-	_m.ctrl.Call(_m, "StartImageCleanupProcess", _param0)
+func (_m *MockImageManager) StartImageCleanupProcess(_param0 context.Context, _param1 TaskEngine) {
+	_m.ctrl.Call(_m, "StartImageCleanupProcess", _param0, _param1)
 }
 
-func (_mr *_MockImageManagerRecorder) StartImageCleanupProcess(arg0 interface{}) *gomock.Call {
-	return _mr.mock.ctrl.RecordCall(_mr.mock, "StartImageCleanupProcess", arg0)
+func (_mr *_MockImageManagerRecorder) StartImageCleanupProcess(arg0, arg1 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "StartImageCleanupProcess", arg0, arg1)
+}
+
+func (_m *MockImageManager) AddAllImageStates(_param0 []*image.ImageState) {
+	_m.ctrl.Call(_m, "AddAllImageStates", _param0)
+}
+
+func (_mr *_MockImageManagerRecorder) AddAllImageStates(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "AddAllImageStates", arg0)
+}
+
+func (_m *MockImageManager) GetImageStateFromImageName(_param0 string) *image.ImageState {
+	ret := _m.ctrl.Call(_m, "GetImageStateFromImageName", _param0)
+	ret0, _ := ret[0].(*image.ImageState)
+	return ret0
+}
+
+func (_mr *_MockImageManagerRecorder) GetImageStateFromImageName(arg0 interface{}) *gomock.Call {
+	return _mr.mock.ctrl.RecordCall(_mr.mock, "GetImageStateFromImageName", arg0)
 }

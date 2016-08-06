@@ -48,7 +48,9 @@ func mocks(t *testing.T, cfg *config.Config) (*gomock.Controller, *MockDockerCli
 }
 
 func TestBatchContainerHappyPath(t *testing.T) {
+
 	ctrl, client, mockTime, taskEngine, credentialsManager, imageManager := mocks(t, &defaultConfig)
+
 	defer ctrl.Finish()
 
 	roleCredentials := &credentials.TaskIAMRoleCredentials{
@@ -73,8 +75,10 @@ func TestBatchContainerHappyPath(t *testing.T) {
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	var createdContainerName string
 	for _, container := range sleepTask.Containers {
+		imageManager.EXPECT().AddAllImageStates(gomock.Any()).AnyTimes()
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
-		imageManager.EXPECT().AddContainerReferenceToImageState(container)
+		imageManager.EXPECT().AddContainerReferenceToImageState(container).Return(nil)
+		imageManager.EXPECT().GetImageStateFromImageName(gomock.Any()).Return(nil)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		// Container config should get updated with this during PostUnmarshalTask
 		credentialsEndpointEnvValue := roleCredentials.IAMRoleCredentials.GenerateCredentialsEndpointRelativeURI()
@@ -214,8 +218,10 @@ func TestRemoveEvents(t *testing.T) {
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	var createdContainerName string
 	for _, container := range sleepTask.Containers {
+		imageManager.EXPECT().AddAllImageStates(gomock.Any()).AnyTimes()
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
+		imageManager.EXPECT().GetImageStateFromImageName(gomock.Any()).Return(nil)
 		client.EXPECT().CreateContainer(gomock.Any(), gomock.Any(), gomock.Any()).Do(func(x, y interface{}, containerName string) {
 			// sleep5 task contains only one container. Just assign
 			// the containerName to createdContainerName
@@ -330,9 +336,11 @@ func TestStartTimeoutThenStart(t *testing.T) {
 
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	for _, container := range sleepTask.Containers {
+		imageManager.EXPECT().AddAllImageStates(gomock.Any()).AnyTimes()
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
 
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
+		imageManager.EXPECT().GetImageStateFromImageName(gomock.Any()).Return(nil)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		if err != nil {
 			t.Fatal(err)
@@ -420,9 +428,10 @@ func TestSteadyStatePoll(t *testing.T) {
 
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
 	for _, container := range sleepTask.Containers {
+		imageManager.EXPECT().AddAllImageStates(gomock.Any()).AnyTimes()
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
-
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
+		imageManager.EXPECT().GetImageStateFromImageName(gomock.Any()).Return(nil)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		if err != nil {
 			t.Fatal(err)
@@ -499,7 +508,7 @@ func TestSteadyStatePoll(t *testing.T) {
 }
 
 func TestStopWithPendingStops(t *testing.T) {
-	ctrl, client, testTime, taskEngine, _, _ := mocks(t, &defaultConfig)
+	ctrl, client, testTime, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
 	testTime.EXPECT().Now().AnyTimes()
 	testTime.EXPECT().After(gomock.Any()).AnyTimes()
@@ -512,7 +521,7 @@ func TestStopWithPendingStops(t *testing.T) {
 	eventStream := make(chan DockerContainerChangeEvent)
 
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
-
+	imageManager.EXPECT().AddAllImageStates(gomock.Any()).AnyTimes()
 	err := taskEngine.Init()
 	if err != nil {
 		t.Fatal(err)
@@ -634,9 +643,10 @@ func TestTaskTransitionWhenStopContainerTimesout(t *testing.T) {
 	mockTime.EXPECT().After(gomock.Any()).AnyTimes()
 	containerStopTimeoutError := DockerContainerMetadata{Error: &DockerTimeoutError{transition: "stop", duration: stopContainerTimeout}}
 	for _, container := range sleepTask.Containers {
+		imageManager.EXPECT().AddAllImageStates(gomock.Any()).AnyTimes()
 		client.EXPECT().PullImage(container.Image, nil).Return(DockerContainerMetadata{})
-
 		imageManager.EXPECT().AddContainerReferenceToImageState(container)
+		imageManager.EXPECT().GetImageStateFromImageName(gomock.Any()).Return(nil)
 		dockerConfig, err := sleepTask.DockerConfig(container)
 		if err != nil {
 			t.Fatal(err)
@@ -809,10 +819,13 @@ func TestCapabilitiesTaskIAMRoleForUnSupportedDockerVersion(t *testing.T) {
 func TestGetTaskByArn(t *testing.T) {
 	// Need a mock client as AddTask not only adds a task to the engine, but
 	// also causes the engine to progress the task.
-	ctrl, client, _, taskEngine, _, _ := mocks(t, &defaultConfig)
+
+	ctrl, client, _, taskEngine, _, imageManager := mocks(t, &defaultConfig)
 	defer ctrl.Finish()
+
 	eventStream := make(chan DockerContainerChangeEvent)
 	client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
+	imageManager.EXPECT().AddAllImageStates(gomock.Any()).AnyTimes()
 	client.EXPECT().PullImage(gomock.Any(), gomock.Any()).AnyTimes() // TODO change to MaxTimes(1)
 	err := taskEngine.Init()
 	if err != nil {
