@@ -224,7 +224,7 @@ func _main() int {
 	taskEngine.MustInit()
 
 	// start of the periodic image cleanup process
-	go imageManager.StartImageCleanupProcess(ctx)
+	go imageManager.StartImageCleanupProcess(ctx, taskEngine)
 
 	go sighandlers.StartTerminationHandler(stateManager, taskEngine)
 

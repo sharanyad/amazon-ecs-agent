@@ -228,6 +228,10 @@ func (engine *DockerTaskEngine) synchronizeState() {
 		}
 		engine.startTask(task)
 	}
+	imageStates := engine.state.AllImageStates()
+	if imageStates != nil {
+		engine.imageManager.AddAllImageStates(imageStates)
+	}
 	engine.saver.Save()
 }
 
@@ -273,6 +277,7 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 			seelog.Errorf("Error removing container reference from image state: %v", err)
 		}
 	}
+	engine.saver.Save()
 }
 
 func (engine *DockerTaskEngine) emitTaskEvent(task *api.Task, reason string) {
@@ -443,6 +448,9 @@ func (engine *DockerTaskEngine) pullContainer(task *api.Task, container *api.Con
 	if err != nil {
 		seelog.Errorf("Error adding container reference to image state: %v", err)
 	}
+	imageState := engine.imageManager.GetImageStateFromImageName(container.Image)
+	engine.state.AddImageState(imageState)
+	engine.saver.Save()
 	return metadata
 }
 
