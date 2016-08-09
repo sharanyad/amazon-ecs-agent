@@ -24,6 +24,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/credentials/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
+	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	"github.com/aws/amazon-ecs-agent/agent/engine/testdata"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime/mocks"
@@ -42,7 +43,7 @@ func mocks(t *testing.T, cfg *config.Config) (*gomock.Controller, *MockDockerCli
 	mockTime := mock_ttime.NewMockTime(ctrl)
 	credentialsManager := mock_credentials.NewMockManager(ctrl)
 	imageManager := NewMockImageManager(ctrl)
-	taskEngine := NewTaskEngine(cfg, client, credentialsManager, imageManager)
+	taskEngine := NewTaskEngine(cfg, client, credentialsManager, imageManager, dockerstate.NewDockerTaskEngineState())
 	taskEngine.(*DockerTaskEngine)._time = mockTime
 	return ctrl, client, mockTime, taskEngine, credentialsManager, imageManager
 }

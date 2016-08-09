@@ -37,15 +37,6 @@ type ImageState struct {
 	UpdateLock sync.RWMutex
 }
 
-func (imageState *ImageState) HasImageName(containerImageName string) bool {
-	for _, imageName := range imageState.Image.Names {
-		if imageName == containerImageName {
-			return true
-		}
-	}
-	return false
-}
-
 func (imageState *ImageState) UpdateContainerReference(container *api.Container) {
 	imageState.UpdateLock.Lock()
 	defer imageState.UpdateLock.Unlock()
@@ -80,4 +71,13 @@ func (imageState *ImageState) RemoveImageName(containerImageName string) {
 			imageState.Image.Names = append(imageState.Image.Names[:i], imageState.Image.Names[i+1:]...)
 		}
 	}
+}
+
+func (imageState *ImageState) HasImageName(containerImageName string) bool {
+	for _, imageName := range imageState.Image.Names {
+		if imageName == containerImageName {
+			return true
+		}
+	}
+	return false
 }
