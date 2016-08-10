@@ -49,7 +49,7 @@ const (
 	removeContainerTimeout  = 5 * time.Minute
 	inspectContainerTimeout = 30 * time.Second
 	listContainersTimeout   = 10 * time.Minute
-	removeImageTimeout      = 15 * time.Minute
+	removeImageTimeout      = 5 * time.Minute
 
 	// dockerPullBeginTimeout is the timeout from when a 'pull' is called to when
 	// we expect to see output on the pull progress stream. This is to work
@@ -751,6 +751,9 @@ func (dg *dockerGoClient) Stats(id string, ctx context.Context) (<-chan *docker.
 }
 
 func (dg *dockerGoClient) RemoveImage(imageName string, imageRemovalTimeout time.Duration) error {
+	pullLock.Lock()
+	defer pullLock.Unlock()
+
 	ctx, cancel := context.WithTimeout(context.Background(), imageRemovalTimeout)
 	defer cancel()
 

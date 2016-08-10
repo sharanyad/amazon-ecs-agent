@@ -53,6 +53,7 @@ type ImageState struct {
 	Containers []*api.Container
 	PulledAt   time.Time
 	LastUsedAt time.Time
+	updateLock sync.RWMutex
 }
 
 // dockerImageManager accounts all the images and their states in the instance.
@@ -81,6 +82,8 @@ func (imageManager *dockerImageManager) addImageState(imageState *ImageState) {
 
 // removeImageState removes the imageState from the list of imageState objects in ImageManager
 func (imageManager *dockerImageManager) removeImageState(imageStateToBeRemoved *ImageState) {
+	imageManager.updateLock.Lock()
+	defer imageManager.updateLock.Unlock()
 	for i, imageState := range imageManager.imageStates {
 		if imageState.Image.ImageId == imageStateToBeRemoved.Image.ImageId {
 			// Image State found; hence remove it
@@ -98,8 +101,6 @@ func (imageManager *dockerImageManager) getAllImageStates() []*ImageState {
 
 // AddContainerReferenceToImageState adds container reference to the corresponding imageState object
 func (imageManager *dockerImageManager) AddContainerReferenceToImageState(container *api.Container) error {
-	imageManager.updateLock.Lock()
-	defer imageManager.updateLock.Unlock()
 	if container.Image == "" {
 		return fmt.Errorf("Invalid container reference: Empty image name")
 	}
@@ -109,40 +110,57 @@ func (imageManager *dockerImageManager) AddContainerReferenceToImageState(contai
 		seelog.Errorf("Error inspecting image %v: %v", container.Image, err)
 		return err
 	}
-
-	imageManager.removeExistingImageNameOfDifferentID(container.Image, imageInspected.ID)
-	imageState, ok := imageManager.getImageState(imageInspected.ID)
-	if ok {
-		// Image State already exists; add Container to it
-		exists := imageState.hasImageName(container.Image)
-		if !exists {
-			seelog.Infof("Adding image name- %v to Image state- %v", container.Image, imageState.Image.ImageId)
-			imageState.addImageName(container.Image)
-		}
-		seelog.Infof("Updating container reference- %v in Image state- %v", container.Name, imageState.Image.ImageId)
-		imageState.updateContainerReference(container)
-		return nil
+	added := imageManager.addContainerReferenceToExistingImageState(container, imageInspected.ID)
+	if !added {
+		imageManager.addContainerReferenceToNewImageState(container, imageInspected.ID, imageInspected.Size)
 	}
-	sourceImage := &Image{
-		ImageId: imageInspected.ID,
-		Size:    imageInspected.Size,
-	}
-	sourceImageState := &ImageState{
-		Image:    sourceImage,
-		PulledAt: time.Now(),
-	}
-	seelog.Infof("Adding image name- %v to Image state- %v", container.Image, sourceImageState.Image.ImageId)
-	sourceImageState.addImageName(container.Image)
-	seelog.Infof("Updating container reference- %v in Image state %v", container.Name, sourceImage.ImageId)
-	sourceImageState.updateContainerReference(container)
-	imageManager.addImageState(sourceImageState)
 	return nil
+}
+
+func (imageManager *dockerImageManager) addContainerReferenceToExistingImageState(container *api.Container, imageId string) bool {
+	// this lock is used for reading the image states in the image manager
+	imageManager.updateLock.RLock()
+	defer imageManager.updateLock.RUnlock()
+	imageManager.removeExistingImageNameOfDifferentID(container.Image, imageId)
+	imageState, ok := imageManager.getImageState(imageId)
+	if ok {
+		imageState.updateImageState(container)
+	}
+	return ok
+}
+
+func (imageManager *dockerImageManager) addContainerReferenceToNewImageState(container *api.Container, imageId string, imageSize int64) {
+	// this lock is used while creating and adding new image state to image manager
+	imageManager.updateLock.Lock()
+	defer imageManager.updateLock.Unlock()
+	// check to see if a different thread added image state for same image ID
+	imageState, ok := imageManager.getImageState(imageId)
+	if ok {
+		imageState.updateImageState(container)
+	} else {
+		sourceImage := &Image{
+			ImageId: imageId,
+			Size:    imageSize,
+		}
+		sourceImageState := &ImageState{
+			Image:    sourceImage,
+			PulledAt: time.Now(),
+		}
+		sourceImageState.updateImageState(container)
+		imageManager.addImageState(sourceImageState)
+	}
+}
+
+func (imageState *ImageState) updateImageState(container *api.Container) {
+	imageState.addImageName(container.Image)
+	imageState.updateContainerReference(container)
 }
 
 // RemoveContainerReferenceFromImageState removes container reference from the corresponding imageState object
 func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(container *api.Container) error {
-	imageManager.updateLock.Lock()
-	defer imageManager.updateLock.Unlock()
+	// this lock is for reading image states and finding the one that the container belongs to
+	imageManager.updateLock.RLock()
+	defer imageManager.updateLock.RUnlock()
 	if container.Image == "" {
 		return fmt.Errorf("Invalid container reference: Empty image name")
 	}
@@ -159,6 +177,9 @@ func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(c
 		return fmt.Errorf("Cannot find image state for the container to be removed")
 	}
 	// Found matching ImageState
+	// Get the image state write lock for updating container reference
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
 	for i, _ := range imageState.Containers {
 		if imageState.Containers[i].Name == container.Name {
 			// Container reference found; hence remove it
@@ -192,11 +213,20 @@ func (imageState *ImageState) hasImageName(containerImageName string) bool {
 }
 
 func (imageState *ImageState) updateContainerReference(container *api.Container) {
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
+	seelog.Infof("Updating container reference- %v in Image state- %v", container.Name, imageState.Image.ImageId)
 	imageState.Containers = append(imageState.Containers, container)
+	imageState.LastUsedAt = time.Now()
 }
 
 func (imageState *ImageState) addImageName(imageName string) {
-	imageState.Image.Names = append(imageState.Image.Names, imageName)
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
+	if !imageState.hasImageName(imageName) {
+		seelog.Infof("Adding image name- %v to Image state- %v", imageName, imageState.Image.ImageId)
+		imageState.Image.Names = append(imageState.Image.Names, imageName)
+	}
 }
 
 func (imageManager *dockerImageManager) getCandidateImagesForDeletion() []*ImageState {
@@ -256,13 +286,9 @@ func (imageManager *dockerImageManager) getLeastRecentlyUsedImages(imagesForDele
 
 func (imageManager *dockerImageManager) removeExistingImageNameOfDifferentID(containerImageName string, inspectedImageID string) {
 	for _, imageState := range imageManager.getAllImageStates() {
-		for i, _ := range imageState.Image.Names {
-			if imageState.Image.Names[i] == containerImageName && imageState.Image.ImageId != inspectedImageID {
-				// image with same name pulled in the instance. Untag the already existing image name
-				seelog.Infof("Removing Image Name: %v from Image- %v", containerImageName, imageState.Image.ImageId)
-				imageState.Image.Names = append(imageState.Image.Names[:i], imageState.Image.Names[i+1:]...)
-				return
-			}
+		// image with same name pulled in the instance. Untag the already existing image name
+		if imageState.Image.ImageId != inspectedImageID {
+			imageManager.removeImageName(containerImageName, imageState)
 		}
 	}
 }
@@ -286,30 +312,34 @@ func (imageManager *dockerImageManager) performPeriodicImageCleanup(ctx context.
 }
 
 func (imageManager *dockerImageManager) removeUnusedImages() {
-	// coarse grained lock for not letting other events change the Image Manager while cleanup
-	imageManager.updateLock.Lock()
-	defer imageManager.updateLock.Unlock()
-	candidateImageStatesForDeletion := imageManager.getCandidateImagesForDeletion()
-	if len(candidateImageStatesForDeletion) < 1 {
-		seelog.Infof("No eligible images for deletion for this cleanup cycle")
-		return
-	}
-	leastRecentlyUsedImages := imageManager.getLeastRecentlyUsedImages(candidateImageStatesForDeletion)
+	leastRecentlyUsedImages := imageManager.getUnusedImagesForDeletion()
 	imageManager.removeImages(leastRecentlyUsedImages)
 }
 
+func (imageManager *dockerImageManager) getUnusedImagesForDeletion() []*ImageState {
+	imageManager.updateLock.RLock()
+	defer imageManager.updateLock.RUnlock()
+	candidateImageStatesForDeletion := imageManager.getCandidateImagesForDeletion()
+	if len(candidateImageStatesForDeletion) < 1 {
+		seelog.Infof("No eligible images for deletion for this cleanup cycle")
+		return nil
+	}
+	return imageManager.getLeastRecentlyUsedImages(candidateImageStatesForDeletion)
+}
+
 func (imageManager *dockerImageManager) removeImages(leastRecentlyUsedImages []*ImageState) {
+	// remove an image either by ID or names
 	if len(leastRecentlyUsedImages) < 1 {
 		seelog.Infof("No images returned for deletion")
 		return
 	}
 	for _, leastRecentlyUsedImage := range leastRecentlyUsedImages {
-		if len(leastRecentlyUsedImage.Image.Names) == 0 {
+		imageNames := leastRecentlyUsedImage.Image.Names
+		if len(imageNames) == 0 {
 			// potentially untagged image of format <none>:<none>; remove by ID
 			imageManager.deleteImage(leastRecentlyUsedImage.Image.ImageId, leastRecentlyUsedImage)
 		} else {
 			// Image has multiple tags/repos. Untag each name and delete the final reference to image
-			imageNames := leastRecentlyUsedImage.Image.Names
 			for _, imageName := range imageNames {
 				imageManager.deleteImage(imageName, leastRecentlyUsedImage)
 			}
@@ -335,6 +365,8 @@ func (imageManager *dockerImageManager) deleteImage(imageIdentity string, imageS
 }
 
 func (imageManager *dockerImageManager) removeImageName(containerImageName string, imageState *ImageState) {
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
 	for i, imageName := range imageState.Image.Names {
 		if imageName == containerImageName {
 			imageState.Image.Names = append(imageState.Image.Names[:i], imageState.Image.Names[i+1:]...)
