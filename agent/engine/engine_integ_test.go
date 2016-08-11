@@ -32,6 +32,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
+	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 	docker "github.com/fsouza/go-dockerclient"
@@ -74,7 +75,7 @@ func setup(cfg *config.Config, t *testing.T) (TaskEngine, func(), credentials.Ma
 		t.Fatalf("Error creating Docker client: %v", err)
 	}
 	credentialsManager := credentials.NewManager()
-	imageManager := NewImageManager(dockerClient)
+	imageManager := NewImageManager(dockerClient, dockerstate.NewDockerTaskEngineState())
 	taskEngine := NewDockerTaskEngine(cfg, dockerClient, credentialsManager, imageManager)
 	taskEngine.Init()
 	return taskEngine, func() {

@@ -887,7 +887,7 @@ func TestRemoveImageTimeout(t *testing.T) {
 	})
 	err := client.RemoveImage("image", 2*time.Millisecond)
 	if err == nil {
-		t.Error("Expected error for remove image timeout")
+		t.Errorf("Expected error for remove image timeout")
 	}
 	wait.Done()
 }
@@ -900,6 +900,6 @@ func TestRemoveImage(t *testing.T) {
 	mockDocker.EXPECT().RemoveImage("image").Return(nil)
 	err := client.RemoveImage("image", 2*time.Millisecond)
 	if err != nil {
-		t.Error("Did not expect error")
+		t.Errorf("Did not expect error")
 	}
 }
