@@ -107,6 +107,10 @@ func NewDockerTaskEngine(cfg *config.Config, client DockerClient, credentialsMan
 	return dockerTaskEngine
 }
 
+// this lock was used a temporary workaround for a devicemapper issue(serializing pulls). See: https://github.com/docker/docker/issues/9718
+// now serializes pulls and delete of images
+var ImagePullDeleteLock sync.Mutex
+
 // UnmarshalJSON restores a previously marshaled task-engine state from json
 func (engine *DockerTaskEngine) UnmarshalJSON(data []byte) error {
 	return engine.state.UnmarshalJSON(data)
@@ -447,6 +451,11 @@ func (engine *DockerTaskEngine) GetTaskByArn(arn string) (*api.Task, bool) {
 
 func (engine *DockerTaskEngine) pullContainer(task *api.Task, container *api.Container) DockerContainerMetadata {
 	log.Info("Pulling container", "task", task, "container", container)
+	seelog.Debugf("Attempting to obtain ImagePullDeleteLock to pull image - %s", container.Image)
+	ImagePullDeleteLock.Lock()
+	seelog.Debugf("Obtained ImagePullDeleteLock to pull image - %s", container.Image)
+	defer seelog.Debugf("Released ImagePullDeleteLock after pulling image - %s", container.Image)
+	defer ImagePullDeleteLock.Unlock()
 	metadata := engine.client.PullImage(container.Image, container.RegistryAuthentication)
 	err := engine.imageManager.AddContainerReferenceToImageState(container)
 	if err != nil {

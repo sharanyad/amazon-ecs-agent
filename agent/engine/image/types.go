@@ -22,7 +22,7 @@ import (
 )
 
 type Image struct {
-	ImageId string
+	ImageID string
 	Names   []string
 	Size    int64
 }
@@ -49,7 +49,7 @@ func (imageState *ImageState) HasImageName(containerImageName string) bool {
 func (imageState *ImageState) UpdateContainerReference(container *api.Container) {
 	imageState.UpdateLock.Lock()
 	defer imageState.UpdateLock.Unlock()
-	seelog.Infof("Updating container reference %v in Image State - %v", container.Name, imageState.Image.ImageId)
+	seelog.Infof("Updating container reference %v in Image State - %v", container.Name, imageState.Image.ImageID)
 	imageState.Containers = append(imageState.Containers, container)
 	imageState.LastUsedAt = time.Now()
 }
@@ -58,7 +58,7 @@ func (imageState *ImageState) AddImageName(imageName string) {
 	imageState.UpdateLock.Lock()
 	defer imageState.UpdateLock.Unlock()
 	if !imageState.HasImageName(imageName) {
-		seelog.Infof("Adding image name- %v to Image state- %v", imageName, imageState.Image.ImageId)
+		seelog.Infof("Adding image name- %v to Image state- %v", imageName, imageState.Image.ImageID)
 		imageState.Image.Names = append(imageState.Image.Names, imageName)
 	}
 }

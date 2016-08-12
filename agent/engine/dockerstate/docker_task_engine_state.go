@@ -97,14 +97,14 @@ func (state *DockerTaskEngineState) AddImageState(imageState *image.ImageState) 
 		log.Debug("Cannot add empty image state")
 		return
 	}
-	if imageState.Image.ImageId == "" {
+	if imageState.Image.ImageID == "" {
 		log.Debug("Cannot add image state with empty image id")
 		return
 	}
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
-	state.imageStates[imageState.Image.ImageId] = imageState
+	state.imageStates[imageState.Image.ImageID] = imageState
 }
 
 // RemoveTask removes a task from this state. It removes all containers and
@@ -138,12 +138,12 @@ func (state *DockerTaskEngineState) RemoveImageState(imageState *image.ImageStat
 	state.lock.Lock()
 	defer state.lock.Unlock()
 
-	imageState, ok := state.imageStates[imageState.Image.ImageId]
+	imageState, ok := state.imageStates[imageState.Image.ImageID]
 	if !ok {
 		log.Debug("Image State is not found. Cannot be removed")
 		return
 	}
-	delete(state.imageStates, imageState.Image.ImageId)
+	delete(state.imageStates, imageState.Image.ImageID)
 }
 
 // AddContainer adds a container to the state.
