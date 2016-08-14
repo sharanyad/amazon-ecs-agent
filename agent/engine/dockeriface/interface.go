@@ -35,4 +35,5 @@ type Client interface {
 	Stats(opts docker.StatsOptions) error
 	Version() (*docker.Env, error)
 	RemoveImage(imageName string) error
+	RemoveImageExtended(name string, opts docker.RemoveImageOptions) error
 }
