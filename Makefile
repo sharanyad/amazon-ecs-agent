@@ -62,7 +62,7 @@ short-test:
 	. ./scripts/shared_env && go test -short -timeout=25s $(shell go list ./agent/... | grep -v /vendor/)
 
 # Run our 'test' registry needed for integ and functional tests
-test-registry: netkitten volumes-test squid
+test-registry: netkitten volumes-test squid test-images
 	@./scripts/setup-test-registry
 
 test: test-registry gremlin
@@ -91,6 +91,11 @@ squid:
 gremlin:
 	cd misc/gremlin; $(MAKE) $(MFLAGS)
 
+test-images:
+	cd misc/test-images/test-image1; $(MAKE) $(MFLAGS)
+	cd misc/test-images/test-image2; $(MAKE) $(MFLAGS)
+	cd misc/test-images/test-image3; $(MAKE) $(MFLAGS)
+
 get-deps:
 	go get github.com/tools/godep
 	go get golang.org/x/tools/cmd/cover
@@ -105,3 +110,6 @@ clean:
 	cd misc/netkitten; $(MAKE) $(MFLAGS) clean
 	cd misc/volumes-test; $(MAKE) $(MFLAGS) clean
 	cd misc/gremlin; $(MAKE) $(MFLAGS) clean
+	cd misc/test-images/test-image1; $(MAKE) $(MFLAGS) clean
+	cd misc/test-images/test-image2; $(MAKE) $(MFLAGS) clean
+	cd misc/test-images/test-image3; $(MAKE) $(MFLAGS) clean
