@@ -85,6 +85,7 @@ type DockerClient interface {
 	Version() (string, error)
 	InspectImage(string) (*docker.Image, error)
 	RemoveImage(string, time.Duration) error
+	RemoveImageExtended(string, docker.RemoveImageOptions) error
 }
 
 // DockerGoClient wraps the underlying go-dockerclient library.
@@ -773,4 +774,26 @@ func (dg *dockerGoClient) removeImage(imageName string) error {
 		return err
 	}
 	return client.RemoveImage(imageName)
+}
+
+func (dg *dockerGoClient) RemoveImageExtended(imageName string, opts docker.RemoveImageOptions) error {
+	ctx, cancel := context.WithTimeout(context.Background(), removeImageTimeout)
+	defer cancel()
+
+	response := make(chan error, 1)
+	go func() { response <- dg.removeImageExtended(imageName, opts) }()
+	select {
+	case resp := <-response:
+		return resp
+	case <-ctx.Done():
+		return &DockerTimeoutError{removeImageTimeout, "removing image(extended)"}
+	}
+}
+
+func (dg *dockerGoClient) removeImageExtended(imageName string, opts docker.RemoveImageOptions) error {
+	client, err := dg.dockerClient()
+	if err != nil {
+		return err
+	}
+	return client.RemoveImageExtended(imageName, opts)
 }

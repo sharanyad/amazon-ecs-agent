@@ -51,10 +51,13 @@ type dockerImageManager struct {
 	imageStates []*image.ImageState
 	client      DockerClient
 	// coarse grained lock for updating container references as part of image states
-	updateLock         sync.RWMutex
-	imageCleanupTicker *time.Ticker
-	state              *dockerstate.DockerTaskEngineState
-	saver              statemanager.Saver
+	updateLock               sync.RWMutex
+	imageCleanupTicker       *time.Ticker
+	state                    *dockerstate.DockerTaskEngineState
+	saver                    statemanager.Saver
+	minimumAgeBeforeDeletion time.Duration
+	numImagesToDelete        int
+	imageCleanupTimeInterval time.Duration
 }
 
 // ImageStatesForDeletion is used for implementing the sort interface
@@ -64,6 +67,9 @@ func NewImageManager(client DockerClient, state *dockerstate.DockerTaskEngineSta
 	return &dockerImageManager{
 		client: client,
 		state:  state,
+		minimumAgeBeforeDeletion: minimumAgeBeforeDeletion,
+		numImagesToDelete:        numImagesToDelete,
+		imageCleanupTimeInterval: imageCleanupTimeInterval,
 	}
 }
 
@@ -187,6 +193,17 @@ func (imageManager *dockerImageManager) getImageState(containerImageID string) (
 	return nil, false
 }
 
+func (imageManager *dockerImageManager) getImageStateByName(containerImageName string) (*image.ImageState, bool) {
+	for _, imageState := range imageManager.getAllImageStates() {
+		for _, imageName := range imageState.Image.Names {
+			if imageName == containerImageName {
+				return imageState, true
+			}
+		}
+	}
+	return nil, false
+}
+
 // removeImageState removes the imageState from the list of imageState objects in ImageManager
 func (imageManager *dockerImageManager) removeImageState(imageStateToBeRemoved *image.ImageState) {
 	imageManager.updateLock.Lock()
@@ -219,7 +236,7 @@ func (imageManager *dockerImageManager) getCandidateImagesForDeletion() []*image
 
 func (imageManager *dockerImageManager) isImageOldEnough(imageState *image.ImageState) bool {
 	ageOfImage := time.Now().Sub(imageState.PulledAt)
-	return ageOfImage > minimumAgeBeforeDeletion
+	return ageOfImage > imageManager.minimumAgeBeforeDeletion
 }
 
 // Implementing sort interface based on last used times of the images
@@ -246,10 +263,10 @@ func (imageManager *dockerImageManager) getLeastRecentlyUsedImages(imagesForDele
 	for _, lruImage := range candidateImages {
 		lruImages = append(lruImages, lruImage)
 	}
-	if len(lruImages) <= numImagesToDelete {
+	if len(lruImages) <= imageManager.numImagesToDelete {
 		return lruImages
 	}
-	return lruImages[:numImagesToDelete]
+	return lruImages[:imageManager.numImagesToDelete]
 }
 
 func (imageManager *dockerImageManager) removeExistingImageNameOfDifferentID(containerImageName string, inspectedImageID string) {
@@ -263,7 +280,7 @@ func (imageManager *dockerImageManager) removeExistingImageNameOfDifferentID(con
 
 func (imageManager *dockerImageManager) StartImageCleanupProcess(ctx context.Context) {
 	// passing the cleanup interval as argument which would help during testing
-	imageManager.performPeriodicImageCleanup(ctx, imageCleanupTimeInterval)
+	imageManager.performPeriodicImageCleanup(ctx, imageManager.imageCleanupTimeInterval)
 }
 
 func (imageManager *dockerImageManager) performPeriodicImageCleanup(ctx context.Context, imageCleanupInterval time.Duration) {
