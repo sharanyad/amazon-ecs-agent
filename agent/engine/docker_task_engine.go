@@ -107,8 +107,9 @@ func NewDockerTaskEngine(cfg *config.Config, client DockerClient, credentialsMan
 	return dockerTaskEngine
 }
 
-// this lock was used a temporary workaround for a devicemapper issue(serializing pulls). See: https://github.com/docker/docker/issues/9718
-// now serializes pulls and delete of images
+// ImagePullDeleteLock ensures that pulls and deletes do not run at the same time.
+// Pulls are serialized as a temporary workaround for a devicemapper issue. (see https://github.com/docker/docker/issues/9718)
+// Deletes must not run at the same time as pulls to prevent deletion of images that are being used to launch new tasks.
 var ImagePullDeleteLock sync.Mutex
 
 // UnmarshalJSON restores a previously marshaled task-engine state from json

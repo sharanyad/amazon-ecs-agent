@@ -14,6 +14,7 @@
 package image
 
 import (
+	"fmt"
 	"sync"
 	"time"
 
@@ -34,20 +35,20 @@ type ImageState struct {
 	Containers []*api.Container `json:"-"`
 	PulledAt   time.Time
 	LastUsedAt time.Time
-	UpdateLock sync.RWMutex
+	updateLock sync.RWMutex
 }
 
 func (imageState *ImageState) UpdateContainerReference(container *api.Container) {
-	imageState.UpdateLock.Lock()
-	defer imageState.UpdateLock.Unlock()
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
 	seelog.Infof("Updating container reference %v in Image State - %v", container.Name, imageState.Image.ImageID)
 	imageState.Containers = append(imageState.Containers, container)
 	imageState.LastUsedAt = time.Now()
 }
 
 func (imageState *ImageState) AddImageName(imageName string) {
-	imageState.UpdateLock.Lock()
-	defer imageState.UpdateLock.Unlock()
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
 	if !imageState.HasImageName(imageName) {
 		seelog.Infof("Adding image name- %v to Image state- %v", imageName, imageState.Image.ImageID)
 		imageState.Image.Names = append(imageState.Image.Names, imageName)
@@ -64,8 +65,8 @@ func (imageState *ImageState) UpdateImageState(container *api.Container) {
 }
 
 func (imageState *ImageState) RemoveImageName(containerImageName string) {
-	imageState.UpdateLock.Lock()
-	defer imageState.UpdateLock.Unlock()
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
 	for i, imageName := range imageState.Image.Names {
 		if imageName == containerImageName {
 			imageState.Image.Names = append(imageState.Image.Names[:i], imageState.Image.Names[i+1:]...)
@@ -80,4 +81,21 @@ func (imageState *ImageState) HasImageName(containerImageName string) bool {
 		}
 	}
 	return false
+}
+
+func (imageState *ImageState) RemoveContainerReference(container *api.Container) error {
+	// Get the image state write lock for updating container reference
+	imageState.updateLock.Lock()
+	defer imageState.updateLock.Unlock()
+	for i, _ := range imageState.Containers {
+		if imageState.Containers[i].Name == container.Name {
+			// Container reference found; hence remove it
+			seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Name, imageState.Image.ImageID)
+			imageState.Containers = append(imageState.Containers[:i], imageState.Containers[i+1:]...)
+			// Update the last used time for the image
+			imageState.LastUsedAt = time.Now()
+			return nil
+		}
+	}
+	return fmt.Errorf("Container reference is not found in the image state")
 }

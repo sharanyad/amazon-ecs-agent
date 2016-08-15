@@ -160,7 +160,7 @@ func TestRemoveTask(t *testing.T) {
 func TestAddImageState(t *testing.T) {
 	state := NewDockerTaskEngineState()
 
-	testImage := &image.Image{ImageId: "sha256:imagedigest"}
+	testImage := &image.Image{ImageID: "sha256:imagedigest"}
 	testImageState := &image.ImageState{Image: testImage}
 	state.AddImageState(testImageState)
 
@@ -169,7 +169,7 @@ func TestAddImageState(t *testing.T) {
 	}
 
 	for _, imageState := range state.AllImageStates() {
-		if imageState.Image.ImageId != testImage.ImageId {
+		if imageState.Image.ImageID != testImage.ImageID {
 			t.Error("Error in retrieving image state added")
 		}
 	}
@@ -187,7 +187,7 @@ func TestAddEmptyImageState(t *testing.T) {
 func TestAddEmptyIdImageState(t *testing.T) {
 	state := NewDockerTaskEngineState()
 
-	testImage := &image.Image{ImageId: ""}
+	testImage := &image.Image{ImageID: ""}
 	testImageState := &image.ImageState{Image: testImage}
 	state.AddImageState(testImageState)
 
@@ -199,7 +199,7 @@ func TestAddEmptyIdImageState(t *testing.T) {
 func TestRemoveImageState(t *testing.T) {
 	state := NewDockerTaskEngineState()
 
-	testImage := &image.Image{ImageId: "sha256:imagedigest"}
+	testImage := &image.Image{ImageID: "sha256:imagedigest"}
 	testImageState := &image.ImageState{Image: testImage}
 	state.AddImageState(testImageState)
 
@@ -215,7 +215,7 @@ func TestRemoveImageState(t *testing.T) {
 func TestRemoveEmptyImageState(t *testing.T) {
 	state := NewDockerTaskEngineState()
 
-	testImage := &image.Image{ImageId: "sha256:imagedigest"}
+	testImage := &image.Image{ImageID: "sha256:imagedigest"}
 	testImageState := &image.ImageState{Image: testImage}
 	state.AddImageState(testImageState)
 
@@ -231,14 +231,14 @@ func TestRemoveEmptyImageState(t *testing.T) {
 func TestRemoveNonExistingImageState(t *testing.T) {
 	state := NewDockerTaskEngineState()
 
-	testImage := &image.Image{ImageId: "sha256:imagedigest"}
+	testImage := &image.Image{ImageID: "sha256:imagedigest"}
 	testImageState := &image.ImageState{Image: testImage}
 	state.AddImageState(testImageState)
 
 	if len(state.AllImageStates()) != 1 {
 		t.Error("Error adding image state")
 	}
-	testImage1 := &image.Image{ImageId: "sha256:imagedigest1"}
+	testImage1 := &image.Image{ImageID: "sha256:imagedigest1"}
 	testImageState1 := &image.ImageState{Image: testImage1}
 	state.RemoveImageState(testImageState1)
 	if len(state.AllImageStates()) == 0 {

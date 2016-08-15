@@ -153,20 +153,7 @@ func (imageManager *dockerImageManager) RemoveContainerReferenceFromImageState(c
 		return fmt.Errorf("Cannot find image state for the container to be removed")
 	}
 	// Found matching ImageState
-	// Get the image state write lock for updating container reference
-	imageState.UpdateLock.Lock()
-	defer imageState.UpdateLock.Unlock()
-	for i, _ := range imageState.Containers {
-		if imageState.Containers[i].Name == container.Name {
-			// Container reference found; hence remove it
-			seelog.Infof("Removing Container Reference: %v from Image State- %v", container.Name, imageState.Image.ImageID)
-			imageState.Containers = append(imageState.Containers[:i], imageState.Containers[i+1:]...)
-			// Update the last used time for the image
-			imageState.LastUsedAt = time.Now()
-			return nil
-		}
-	}
-	return fmt.Errorf("Container reference is not found in the image state")
+	return imageState.RemoveContainerReference(container)
 }
 
 func (imageManager *dockerImageManager) addImageState(imageState *image.ImageState) {
@@ -278,6 +265,7 @@ func (imageManager *dockerImageManager) removeUnusedImages() {
 	for i := 0; i < numImagesToDelete; i++ {
 		err := imageManager.removeLeastRecentlyUsedImage()
 		if err != nil {
+			seelog.Infof("End of eligible images for deletion")
 			break
 		}
 	}
@@ -291,7 +279,7 @@ func (imageManager *dockerImageManager) removeLeastRecentlyUsedImage() error {
 	defer ImagePullDeleteLock.Unlock()
 	leastRecentlyUsedImage := imageManager.getUnusedImageForDeletion()
 	if leastRecentlyUsedImage == nil {
-		return fmt.Errorf("End of eligible images for deletion")
+		return fmt.Errorf("No more eligible images for deletion")
 	}
 	imageManager.removeImage(leastRecentlyUsedImage)
 	return nil
@@ -305,6 +293,7 @@ func (imageManager *dockerImageManager) getUnusedImageForDeletion() *image.Image
 		seelog.Infof("No eligible images for deletion for this cleanup cycle")
 		return nil
 	}
+	seelog.Infof("Found %d eligible images for deletion", len(candidateImageStatesForDeletion))
 	return imageManager.getLeastRecentlyUsedImage(candidateImageStatesForDeletion)
 }
 
@@ -321,18 +310,23 @@ func (imageManager *dockerImageManager) removeImage(leastRecentlyUsedImage *imag
 	}
 }
 
-func (imageManager *dockerImageManager) deleteImage(imageIdentity string, imageState *image.ImageState) {
-	err := imageManager.client.RemoveImage(imageIdentity, removeImageTimeout)
+func (imageManager *dockerImageManager) deleteImage(imageID string, imageState *image.ImageState) {
+	if imageID == "" {
+		seelog.Errorf("Image ID to be deleted is null")
+		return
+	}
+	seelog.Infof("Removing Image: %s", imageID)
+	err := imageManager.client.RemoveImage(imageID, removeImageTimeout)
 	if err != nil {
 		if err.Error() == imageNotFoundForDeletionError {
 			seelog.Errorf("Image already removed from the instance")
 		} else {
-			seelog.Errorf("Error removing Image %v - %v", imageIdentity, err)
+			seelog.Errorf("Error removing Image %v - %v", imageID, err)
 			return
 		}
 	}
-	seelog.Infof("Image removed: %v", imageIdentity)
-	imageState.RemoveImageName(imageIdentity)
+	seelog.Infof("Image removed: %v", imageID)
+	imageState.RemoveImageName(imageID)
 	if len(imageState.Image.Names) == 0 {
 		imageManager.removeImageState(imageState)
 		imageManager.state.RemoveImageState(imageState)
