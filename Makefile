@@ -76,6 +76,10 @@ test-in-docker:
 run-functional-tests: test-registry
 	. ./scripts/shared_env && go test -tags functional -timeout=30m -v ./agent/functional_tests/...
 
+# Integ tests are prepended with TestInteg
+run-integ-tests: test-registry
+	. ./scripts/shared_env && go test -run "Integ*" -timeout=10m -v ./agent/engine/...
+
 netkitten:
 	cd misc/netkitten; $(MAKE) $(MFLAGS)
 
