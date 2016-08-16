@@ -23,6 +23,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
+	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	docker "github.com/fsouza/go-dockerclient"
 )
@@ -273,7 +274,7 @@ func TestStatsEngineWithDockerTaskEngine(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integ test in short mode")
 	}
-	taskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, nil)
+	taskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, dockerstate.NewDockerTaskEngineState())
 	container, err := createGremlin(client)
 	if err != nil {
 		t.Fatal("Error creating container", err)
