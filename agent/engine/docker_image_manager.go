@@ -48,13 +48,13 @@ type ImageManager interface {
 // dockerImageManager accounts all the images and their states in the instance.
 // It also has the cleanup policy configuration.
 type dockerImageManager struct {
-	imageStates []*image.ImageState
-	client      DockerClient
-	// coarse grained lock for updating container references as part of image states
-	updateLock         sync.RWMutex
-	imageCleanupTicker *time.Ticker
-	state              *dockerstate.DockerTaskEngineState
-	saver              statemanager.Saver
+	imageStates                      []*image.ImageState
+	client                           DockerClient
+	updateLock                       sync.RWMutex
+	imageCleanupTicker               *time.Ticker
+	state                            *dockerstate.DockerTaskEngineState
+	saver                            statemanager.Saver
+	imageStatesConsideredForDeletion map[string]*image.ImageState
 }
 
 // ImageStatesForDeletion is used for implementing the sort interface
@@ -190,13 +190,12 @@ func (imageManager *dockerImageManager) removeImageState(imageStateToBeRemoved *
 }
 
 func (imageManager *dockerImageManager) getCandidateImagesForDeletion() []*image.ImageState {
-	imageStates := imageManager.getAllImageStates()
-	if len(imageStates) < 1 {
+	if len(imageManager.imageStatesConsideredForDeletion) < 1 {
 		// no image states present in image manager
 		return nil
 	}
 	var imagesForDeletion []*image.ImageState
-	for _, imageState := range imageStates {
+	for _, imageState := range imageManager.imageStatesConsideredForDeletion {
 		if imageManager.isImageOldEnough(imageState) && imageState.HasNoAssociatedContainers() {
 			seelog.Infof("Candidate image for deletion: %+v", imageState)
 			imagesForDeletion = append(imagesForDeletion, imageState)
@@ -262,6 +261,10 @@ func (imageManager *dockerImageManager) performPeriodicImageCleanup(ctx context.
 }
 
 func (imageManager *dockerImageManager) removeUnusedImages() {
+	imageManager.imageStatesConsideredForDeletion = make(map[string]*image.ImageState)
+	for _, imageState := range imageManager.getAllImageStates() {
+		imageManager.imageStatesConsideredForDeletion[imageState.Image.ImageID] = imageState
+	}
 	for i := 0; i < numImagesToDelete; i++ {
 		err := imageManager.removeLeastRecentlyUsedImage()
 		if err != nil {
@@ -322,12 +325,14 @@ func (imageManager *dockerImageManager) deleteImage(imageID string, imageState *
 			seelog.Errorf("Image already removed from the instance")
 		} else {
 			seelog.Errorf("Error removing Image %v - %v", imageID, err)
+			delete(imageManager.imageStatesConsideredForDeletion, imageState.Image.ImageID)
 			return
 		}
 	}
 	seelog.Infof("Image removed: %v", imageID)
 	imageState.RemoveImageName(imageID)
 	if len(imageState.Image.Names) == 0 {
+		delete(imageManager.imageStatesConsideredForDeletion, imageState.Image.ImageID)
 		imageManager.removeImageState(imageState)
 		imageManager.state.RemoveImageState(imageState)
 		imageManager.saver.Save()
