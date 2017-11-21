@@ -660,3 +660,137 @@ func TestMetadataServiceValidator(t *testing.T) {
 
 	assert.Equal(t, 42, exitCode, fmt.Sprintf("Expected exit code of 42; got %d", exitCode))
 }
+
+// TestAWSLogsDriverMultilinePattern verifies that multiple log lines with a certain
+// pattern, specified using 'awslogs-multiline-pattern' option, are sent to a single
+// CloudWatch log event
+func TestAWSLogsDriverMultilinePattern(t *testing.T) {
+	RequireDockerVersion(t, ">=17.06.0-ce")
+	cwlClient := cloudwatchlogs.New(session.New(), aws.NewConfig().WithRegion(*ECS.Config.Region))
+	// Test whether the log group exists or not
+	respDescribeLogGroups, err := cwlClient.DescribeLogGroups(&cloudwatchlogs.DescribeLogGroupsInput{
+		LogGroupNamePrefix: aws.String(awslogsLogGroupName),
+	})
+	require.NoError(t, err, "CloudWatchLogs describe log groups failed")
+	logGroupExists := false
+	for i := 0; i < len(respDescribeLogGroups.LogGroups); i++ {
+		if *respDescribeLogGroups.LogGroups[i].LogGroupName == awslogsLogGroupName {
+			logGroupExists = true
+			break
+		}
+	}
+
+	if !logGroupExists {
+		_, err := cwlClient.CreateLogGroup(&cloudwatchlogs.CreateLogGroupInput{
+			LogGroupName: aws.String(awslogsLogGroupName),
+		})
+		require.NoError(t, err, fmt.Sprintf("Failed to create log group %s", awslogsLogGroupName))
+	}
+
+	agentOptions := AgentOptions{
+		ExtraEnvironment: map[string]string{
+			"ECS_AVAILABLE_LOGGING_DRIVERS": `["awslogs"]`,
+		},
+	}
+	agent := RunAgent(t, &agentOptions)
+	defer agent.Cleanup()
+
+	// TODO: Change the version required
+	agent.RequireVersion(">=1.15.0") //Required for awslogs driver multiline pattern option
+
+	tdOverrides := make(map[string]string)
+	tdOverrides["$$$TEST_REGION$$$"] = *ECS.Config.Region
+
+	testTask, err := agent.StartTaskWithTaskDefinitionOverrides(t, "awslogs-multiline", tdOverrides)
+	require.NoError(t, err, "Expected to start task using awslogs driver failed")
+
+	// Wait for the container to start
+	testTask.WaitRunning(waitTaskStateChangeDuration)
+	strs := strings.Split(*testTask.TaskArn, "/")
+	taskID := strs[len(strs)-1]
+
+	// Delete the log stream after the test
+	defer func() {
+		cwlClient.DeleteLogStream(&cloudwatchlogs.DeleteLogStreamInput{
+			LogGroupName:  aws.String(awslogsLogGroupName),
+			LogStreamName: aws.String(fmt.Sprintf("ecs-functional-tests/awslogs-multiline/%s", taskID)),
+		})
+	}()
+
+	params := &cloudwatchlogs.GetLogEventsInput{
+		LogGroupName:  aws.String(awslogsLogGroupName),
+		LogStreamName: aws.String(fmt.Sprintf("ecs-functional-tests/awslogs-multiline/%s", taskID)),
+	}
+	resp, err := waitCloudwatchLogs(cwlClient, params)
+	require.NoError(t, err, "CloudWatchLogs get log failed")
+	assert.Len(t, resp.Events, 2, fmt.Sprintf("Got unexpected number of log events: %d", len(resp.Events)))
+	assert.Equal(t, *resp.Events[0].Message, "INFO: ECS Agent\nRunning\n", fmt.Sprintf("Got log events message unexpected: %s", *resp.Events[0].Message))
+	assert.Equal(t, *resp.Events[1].Message, "INFO: Instance\n", fmt.Sprintf("Got log events message unexpected: %s", *resp.Events[1].Message))
+}
+
+// TestAWSLogsDriverDatetimeFormat verifies that multiple log lines with a certain
+// pattern of timestamp, specified using 'awslogs-datetime-format' option, are sent
+// to a single CloudWatch log event
+func TestAWSLogsDriverDatetimeFormat(t *testing.T) {
+	RequireDockerVersion(t, ">=17.06.0-ce")
+	cwlClient := cloudwatchlogs.New(session.New(), aws.NewConfig().WithRegion(*ECS.Config.Region))
+	// Test whether the log group exists or not
+	respDescribeLogGroups, err := cwlClient.DescribeLogGroups(&cloudwatchlogs.DescribeLogGroupsInput{
+		LogGroupNamePrefix: aws.String(awslogsLogGroupName),
+	})
+	require.NoError(t, err, "CloudWatchLogs describe log groups failed")
+	logGroupExists := false
+	for i := 0; i < len(respDescribeLogGroups.LogGroups); i++ {
+		if *respDescribeLogGroups.LogGroups[i].LogGroupName == awslogsLogGroupName {
+			logGroupExists = true
+			break
+		}
+	}
+
+	if !logGroupExists {
+		_, err := cwlClient.CreateLogGroup(&cloudwatchlogs.CreateLogGroupInput{
+			LogGroupName: aws.String(awslogsLogGroupName),
+		})
+		require.NoError(t, err, fmt.Sprintf("Failed to create log group %s", awslogsLogGroupName))
+	}
+
+	agentOptions := AgentOptions{
+		ExtraEnvironment: map[string]string{
+			"ECS_AVAILABLE_LOGGING_DRIVERS": `["awslogs"]`,
+		},
+	}
+	agent := RunAgent(t, &agentOptions)
+	defer agent.Cleanup()
+
+	// TODO: Change the version required
+	agent.RequireVersion(">=1.15.0") //Required for awslogs driver datetime format option
+
+	tdOverrides := make(map[string]string)
+	tdOverrides["$$$TEST_REGION$$$"] = *ECS.Config.Region
+
+	testTask, err := agent.StartTaskWithTaskDefinitionOverrides(t, "awslogs-datetime", tdOverrides)
+	require.NoError(t, err, "Expected to start task using awslogs driver failed")
+
+	// Wait for the container to start
+	testTask.WaitRunning(waitTaskStateChangeDuration)
+	strs := strings.Split(*testTask.TaskArn, "/")
+	taskID := strs[len(strs)-1]
+
+	// Delete the log stream after the test
+	defer func() {
+		cwlClient.DeleteLogStream(&cloudwatchlogs.DeleteLogStreamInput{
+			LogGroupName:  aws.String(awslogsLogGroupName),
+			LogStreamName: aws.String(fmt.Sprintf("ecs-functional-tests/awslogs-datetime/%s", taskID)),
+		})
+	}()
+
+	params := &cloudwatchlogs.GetLogEventsInput{
+		LogGroupName:  aws.String(awslogsLogGroupName),
+		LogStreamName: aws.String(fmt.Sprintf("ecs-functional-tests/awslogs-datetime/%s", taskID)),
+	}
+	resp, err := waitCloudwatchLogs(cwlClient, params)
+	require.NoError(t, err, "CloudWatchLogs get log failed")
+	assert.Len(t, resp.Events, 2, fmt.Sprintf("Got unexpected number of log events: %d", len(resp.Events)))
+	assert.Equal(t, *resp.Events[0].Message, "May 01, 2017 19:00:01 ECS\n", fmt.Sprintf("Got log events message unexpected: %s", *resp.Events[0].Message))
+	assert.Equal(t, *resp.Events[1].Message, "May 01, 2017 19:00:04 Agent\nRunning\nin the instance\n", fmt.Sprintf("Got log events message unexpected: %s", *resp.Events[1].Message))
+}
