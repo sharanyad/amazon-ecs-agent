@@ -31,6 +31,7 @@ import (
 	. "github.com/aws/amazon-ecs-agent/agent/functional_tests/util"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/aws/arn"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/cloudwatch"
 	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
@@ -706,8 +707,10 @@ func TestAWSLogsDriverMultilinePattern(t *testing.T) {
 
 	// Wait for the container to start
 	testTask.WaitRunning(waitTaskStateChangeDuration)
-	strs := strings.Split(*testTask.TaskArn, "/")
-	taskID := strs[len(strs)-1]
+	parsedARN, err := arn.Parse(*testTask.TaskArn)
+	require.NoError(t, err, "Parsing Task ARN failed")
+	strs := strings.Split(parsedARN.Resource, "/")
+	taskID := strs[1]
 
 	// Delete the log stream after the test
 	defer func() {
@@ -773,8 +776,10 @@ func TestAWSLogsDriverDatetimeFormat(t *testing.T) {
 
 	// Wait for the container to start
 	testTask.WaitRunning(waitTaskStateChangeDuration)
-	strs := strings.Split(*testTask.TaskArn, "/")
-	taskID := strs[len(strs)-1]
+	parsedARN, err := arn.Parse(*testTask.TaskArn)
+	require.NoError(t, err, "Parsing Task ARN failed")
+	strs := strings.Split(parsedARN.Resource, "/")
+	taskID := strs[1]
 
 	// Delete the log stream after the test
 	defer func() {

@@ -62,6 +62,8 @@ func init() {
 	if envEndpoint := os.Getenv("ECS_BACKEND_HOST"); envEndpoint != "" {
 		ecsconfig.Endpoint = &envEndpoint
 	}
+	envEndpoint := "https://madison.us-west-2.amazonaws.com"
+        ecsconfig.Endpoint = &envEndpoint
 
 	ECS = ecs.New(session.New(&ecsconfig))
 	Cluster = "ecs-functional-tests"
@@ -142,7 +144,8 @@ func (agent *TestAgent) StartAgent() error {
 			"ECS_HOST_DATA_DIR=" + agent.TestDir,
 			"ECS_LOGLEVEL=debug",
 			"ECS_LOGFILE=/log/integ_agent.log",
-			"ECS_BACKEND_HOST=" + os.Getenv("ECS_BACKEND_HOST"),
+			//"ECS_BACKEND_HOST=" + os.Getenv("ECS_BACKEND_HOST"),
+			"ECS_BACKEND_HOST=https://madison.us-west-2.amazonaws.com",
 			"AWS_ACCESS_KEY_ID=" + os.Getenv("AWS_ACCESS_KEY_ID"),
 			"AWS_DEFAULT_REGION=" + *ECS.Config.Region,
 			"AWS_SECRET_ACCESS_KEY=" + os.Getenv("AWS_SECRET_ACCESS_KEY"),
