@@ -18,6 +18,7 @@ import (
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	log "github.com/cihub/seelog"
 	"github.com/pkg/errors"
 )
@@ -101,7 +102,8 @@ func dependenciesCanBeResolved(target *api.Container, by []*api.Container) bool 
 func DependenciesAreResolved(target *api.Container,
 	by []*api.Container,
 	id string,
-	manager credentials.Manager) error {
+	manager credentials.Manager,
+	resources []taskresource.TaskResource) error {
 	if !executionCredentialsResolved(target, id, manager) {
 		return CredentialsNotResolvedErr
 	}
@@ -115,6 +117,11 @@ func DependenciesAreResolved(target *api.Container,
 		neededVolumeContainers[i] = volume.SourceContainer
 	}
 
+	resourcesMap := make(map[string]taskresource.TaskResource)
+	for _, resource := range resources {
+		resourcesMap[resource.GetName()] = resource
+	}
+
 	if !verifyStatusResolvable(target, nameMap, neededVolumeContainers, volumeIsResolved) {
 		return volumeUnresolvedErr
 	}
@@ -124,7 +131,7 @@ func DependenciesAreResolved(target *api.Container,
 	}
 
 	if !verifyStatusResolvable(target, nameMap, target.SteadyStateDependencies, onSteadyStateIsResolved) ||
-		!verifyTransitionDependenciesResolved(target, nameMap) {
+		!verifyTransitionDependenciesResolved(target, nameMap, resourcesMap) {
 		return DependentContainerNotResolvedErr
 	}
 
@@ -175,7 +182,9 @@ func verifyStatusResolvable(target *api.Container, existingContainers map[string
 	return true
 }
 
-func verifyTransitionDependenciesResolved(target *api.Container, existingContainers map[string]*api.Container) bool {
+func verifyTransitionDependenciesResolved(target *api.Container,
+	existingContainers map[string]*api.Container,
+	existingResources map[string]taskresource.TaskResource) bool {
 	targetGoal := target.GetDesiredStatus()
 	if targetGoal >= api.ContainerStopped {
 		// A container can always stop, die, or reach whatever other state it
@@ -183,8 +192,8 @@ func verifyTransitionDependenciesResolved(target *api.Container, existingContain
 		return true
 	}
 
-	// TODO: add verifyResourceDependenciesResolved check here
-	return verifyContainerDependenciesResolved(target, existingContainers)
+	return verifyContainerDependenciesResolved(target, existingContainers) &&
+		verifyResourceDependenciesResolved(target, existingResources)
 }
 
 func verifyContainerDependenciesResolved(target *api.Container, existingContainers map[string]*api.Container) bool {
@@ -196,6 +205,21 @@ func verifyContainerDependenciesResolved(target *api.Container, existingContaine
 			return false
 		}
 		if dep.GetKnownStatus() < containerDependency.SatisfiedStatus {
+			return false
+		}
+	}
+	return true
+}
+
+func verifyResourceDependenciesResolved(target *api.Container, existingResources map[string]taskresource.TaskResource) bool {
+	targetNext := target.GetNextKnownStateProgression()
+	resourceDependencies := target.TransitionDependenciesMap[targetNext].ResourceDependencies
+	for _, resourceDependency := range resourceDependencies {
+		dep, exists := existingResources[resourceDependency.ResourceName]
+		if !exists {
+			return false
+		}
+		if dep.GetKnownStatus() < resourceDependency.SatisfiedStatus {
 			return false
 		}
 	}

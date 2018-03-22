@@ -16,6 +16,8 @@ package api
 import (
 	"encoding/json"
 
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
+
 	"github.com/cihub/seelog"
 	"github.com/pkg/errors"
 )
@@ -26,6 +28,9 @@ type TransitionDependencySet struct {
 	// ContainerDependencies is the set of containers on which a transition is
 	// dependent.
 	ContainerDependencies []ContainerDependency `json:"ContainerDependencies"`
+	// ResourceDependencies is the set of resources on which a transition is
+	// dependent.
+	ResourceDependencies []ResourceDependency `json:"ResourceDependencies"`
 }
 
 // ContainerDependency defines the relationship between a dependent container
@@ -38,6 +43,15 @@ type ContainerDependency struct {
 	// DependentStatus defines the status that cannot be reached until the
 	// resource satisfies the dependency
 	DependentStatus ContainerStatus `json:"DependentStatus,omitempty"`
+}
+
+// ResourceDependency defines the relationship between a dependent container
+// and its resource dependency.
+type ResourceDependency struct {
+	// ResourceName defines the Resource on which a transition depends
+	ResourceName string `json:"ResourceName"`
+	// SatisfiedStatus defines the status that satisfies the dependency
+	SatisfiedStatus taskresource.ResourceStatus `json:"SatisfiedStatus"`
 }
 
 // TransitionDependenciesMap is a map of the dependent container status to other

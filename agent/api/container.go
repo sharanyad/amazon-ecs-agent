@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/aws-sdk-go/aws"
 )
 
@@ -563,5 +564,25 @@ func (c *Container) BuildContainerDependency(contName string,
 	}
 	deps := c.TransitionDependenciesMap[dependentStatus]
 	deps.ContainerDependencies = append(deps.ContainerDependencies, contDep)
+	c.TransitionDependenciesMap[dependentStatus] = deps
+}
+
+// BuildResourceDependency adds a new resource dependency and status that satisfies
+// the dependency
+func (c *Container) BuildResourceDependency(resourceName string,
+	satisfiedStatus taskresource.ResourceStatus,
+	dependentStatus ContainerStatus) {
+	if c.TransitionDependenciesMap == nil {
+		c.TransitionDependenciesMap = make(map[ContainerStatus]TransitionDependencySet)
+	}
+	resourceDep := ResourceDependency{
+		ResourceName:    resourceName,
+		SatisfiedStatus: satisfiedStatus,
+	}
+	if _, ok := c.TransitionDependenciesMap[dependentStatus]; !ok {
+		c.TransitionDependenciesMap[dependentStatus] = TransitionDependencySet{}
+	}
+	deps := c.TransitionDependenciesMap[dependentStatus]
+	deps.ResourceDependencies = append(deps.ResourceDependencies, resourceDep)
 	c.TransitionDependenciesMap[dependentStatus] = deps
 }

@@ -28,6 +28,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/ecscni"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerclient"
 	"github.com/aws/amazon-ecs-agent/agent/engine/emptyvolume"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/arn"
@@ -76,6 +77,8 @@ type Task struct {
 	Version string
 	// Containers are the containers for the task
 	Containers []*Container
+	// Resources are the resources for the task
+	Resources []taskresource.TaskResource
 	// Volumes are the volumes for the task
 	Volumes []TaskVolume `json:"volumes"`
 	// CPU is a task-level limit for compute resources. A value of 1 means that
