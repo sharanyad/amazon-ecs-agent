@@ -552,9 +552,6 @@ func (c *Container) GetHealthStatus() HealthStatus {
 func (c *Container) BuildContainerDependency(contName string,
 	satisfiedStatus ContainerStatus,
 	dependentStatus ContainerStatus) {
-	if c.TransitionDependenciesMap == nil {
-		c.TransitionDependenciesMap = make(map[ContainerStatus]TransitionDependencySet)
-	}
 	contDep := ContainerDependency{
 		ContainerName:   contName,
 		SatisfiedStatus: satisfiedStatus,
@@ -570,14 +567,11 @@ func (c *Container) BuildContainerDependency(contName string,
 // BuildResourceDependency adds a new resource dependency and status that satisfies
 // the dependency
 func (c *Container) BuildResourceDependency(resourceName string,
-	satisfiedStatus taskresource.ResourceStatus,
+	requiredStatus taskresource.ResourceStatus,
 	dependentStatus ContainerStatus) {
-	if c.TransitionDependenciesMap == nil {
-		c.TransitionDependenciesMap = make(map[ContainerStatus]TransitionDependencySet)
-	}
 	resourceDep := ResourceDependency{
-		ResourceName:    resourceName,
-		SatisfiedStatus: satisfiedStatus,
+		Name:           resourceName,
+		RequiredStatus: requiredStatus,
 	}
 	if _, ok := c.TransitionDependenciesMap[dependentStatus]; !ok {
 		c.TransitionDependenciesMap[dependentStatus] = TransitionDependencySet{}
@@ -585,4 +579,10 @@ func (c *Container) BuildResourceDependency(resourceName string,
 	deps := c.TransitionDependenciesMap[dependentStatus]
 	deps.ResourceDependencies = append(deps.ResourceDependencies, resourceDep)
 	c.TransitionDependenciesMap[dependentStatus] = deps
+}
+
+func (c *Container) initializeDependenciesMap() {
+	if c.TransitionDependenciesMap == nil {
+		c.TransitionDependenciesMap = make(map[ContainerStatus]TransitionDependencySet)
+	}
 }

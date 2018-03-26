@@ -23,13 +23,13 @@ import (
 )
 
 func TestBuildResourceDependency(t *testing.T) {
-	container := Container{}
+	container := Container{TransitionDependenciesMap: make(map[ContainerStatus]TransitionDependencySet)}
 	depResourceName := "cgroup"
 	container.BuildResourceDependency(depResourceName, taskresource.ResourceStatus(cgroup.CgroupCreated), ContainerRunning)
 	assert.NotNil(t, container.TransitionDependenciesMap)
 	resourceDep := container.TransitionDependenciesMap[ContainerRunning].ResourceDependencies
 	assert.Len(t, container.TransitionDependenciesMap, 1)
 	assert.Len(t, resourceDep, 1)
-	assert.Equal(t, depResourceName, resourceDep[0].ResourceName)
-	assert.Equal(t, taskresource.ResourceStatus(cgroup.CgroupCreated), resourceDep[0].SatisfiedStatus)
+	assert.Equal(t, depResourceName, resourceDep[0].Name)
+	assert.Equal(t, taskresource.ResourceStatus(cgroup.CgroupCreated), resourceDep[0].GetRequiredStatus())
 }

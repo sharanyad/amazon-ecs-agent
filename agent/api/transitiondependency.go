@@ -48,10 +48,15 @@ type ContainerDependency struct {
 // ResourceDependency defines the relationship between a dependent container
 // and its resource dependency.
 type ResourceDependency struct {
-	// ResourceName defines the Resource on which a transition depends
-	ResourceName string `json:"ResourceName"`
-	// SatisfiedStatus defines the status that satisfies the dependency
-	SatisfiedStatus taskresource.ResourceStatus `json:"SatisfiedStatus"`
+	// Name defines the Resource on which a transition depends
+	Name string `json:"Name"`
+	// RequiredStatus defines the status that satisfies the dependency
+	RequiredStatus taskresource.ResourceStatus `json:"RequiredStatus"`
+}
+
+// GetRequiredStatus returns the required status for the dependency
+func (rd *ResourceDependency) GetRequiredStatus() taskresource.ResourceStatus {
+	return rd.RequiredStatus
 }
 
 // TransitionDependenciesMap is a map of the dependent container status to other

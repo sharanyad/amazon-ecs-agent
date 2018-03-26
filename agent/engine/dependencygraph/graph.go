@@ -33,6 +33,12 @@ var (
 	ContainerPastDesiredStatusErr = errors.New("container transition: container status is equal or greater than desired status")
 	volumeUnresolvedErr           = errors.New("dependency graph: container volume dependency not resolved")
 	linkUnresolvedErr             = errors.New("dependency graph: container links dependency not resolved")
+	// ErrContainerDependencyNotResolved is when the container's dependencies
+	// on other containers are not resolved
+	ErrContainerDependencyNotResolved = errors.New("dependency graph: dependency on containers not resolved")
+	// ErrResourceDependencyNotResolved is when the container's dependencies
+	// on task resources are not resolved
+	ErrResourceDependencyNotResolved = errors.New("dependency graph: dependency on resources not resolved")
 )
 
 // Because a container may depend on another container being created
@@ -130,9 +136,12 @@ func DependenciesAreResolved(target *api.Container,
 		return linkUnresolvedErr
 	}
 
-	if !verifyStatusResolvable(target, nameMap, target.SteadyStateDependencies, onSteadyStateIsResolved) ||
-		!verifyTransitionDependenciesResolved(target, nameMap, resourcesMap) {
+	if !verifyStatusResolvable(target, nameMap, target.SteadyStateDependencies, onSteadyStateIsResolved) {
 		return DependentContainerNotResolvedErr
+	}
+
+	if err := verifyTransitionDependenciesResolved(target, nameMap, resourcesMap); err != nil {
+		return err
 	}
 
 	return nil
@@ -184,16 +193,21 @@ func verifyStatusResolvable(target *api.Container, existingContainers map[string
 
 func verifyTransitionDependenciesResolved(target *api.Container,
 	existingContainers map[string]*api.Container,
-	existingResources map[string]taskresource.TaskResource) bool {
+	existingResources map[string]taskresource.TaskResource) error {
 	targetGoal := target.GetDesiredStatus()
 	if targetGoal >= api.ContainerStopped {
 		// A container can always stop, die, or reach whatever other state it
 		// wants regardless of what dependencies it has
-		return true
+		return nil
 	}
 
-	return verifyContainerDependenciesResolved(target, existingContainers) &&
-		verifyResourceDependenciesResolved(target, existingResources)
+	if !verifyContainerDependenciesResolved(target, existingContainers) {
+		return ErrContainerDependencyNotResolved
+	}
+	if !verifyResourceDependenciesResolved(target, existingResources) {
+		return ErrResourceDependencyNotResolved
+	}
+	return nil
 }
 
 func verifyContainerDependenciesResolved(target *api.Container, existingContainers map[string]*api.Container) bool {
@@ -215,11 +229,11 @@ func verifyResourceDependenciesResolved(target *api.Container, existingResources
 	targetNext := target.GetNextKnownStateProgression()
 	resourceDependencies := target.TransitionDependenciesMap[targetNext].ResourceDependencies
 	for _, resourceDependency := range resourceDependencies {
-		dep, exists := existingResources[resourceDependency.ResourceName]
+		dep, exists := existingResources[resourceDependency.Name]
 		if !exists {
 			return false
 		}
-		if dep.GetKnownStatus() < resourceDependency.SatisfiedStatus {
+		if dep.GetKnownStatus() < resourceDependency.GetRequiredStatus() {
 			return false
 		}
 	}

@@ -447,125 +447,119 @@ func assertResolved(f func(target *api.Container, dep *api.Container) bool, targ
 
 func TestVerifyTransitionDependenciesResolved(t *testing.T) {
 	testcases := []struct {
-		Name             string
-		TargetKnown      api.ContainerStatus
-		TargetDesired    api.ContainerStatus
-		TargetNext       api.ContainerStatus
-		DependencyName   string
-		DependencyKnown  api.ContainerStatus
-		SatisfiedStatus  api.ContainerStatus
-		ExpectedResolved bool
+		Name            string
+		TargetKnown     api.ContainerStatus
+		TargetDesired   api.ContainerStatus
+		TargetNext      api.ContainerStatus
+		DependencyName  string
+		DependencyKnown api.ContainerStatus
+		SatisfiedStatus api.ContainerStatus
+		ResolvedErr     error
 	}{
 		{
-			Name:             "Nothing running, pull depends on running",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerPulled,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerStatusNone,
-			SatisfiedStatus:  api.ContainerRunning,
-			ExpectedResolved: false,
+			Name:            "Nothing running, pull depends on running",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerPulled,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerStatusNone,
+			SatisfiedStatus: api.ContainerRunning,
+			ResolvedErr:     ErrContainerDependencyNotResolved,
 		},
 
 		{
-			Name:             "Nothing running, pull depends on resources provisioned",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerPulled,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerStatusNone,
-			SatisfiedStatus:  api.ContainerResourcesProvisioned,
-			ExpectedResolved: false,
+			Name:            "Nothing running, pull depends on resources provisioned",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerPulled,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerStatusNone,
+			SatisfiedStatus: api.ContainerResourcesProvisioned,
+			ResolvedErr:     ErrContainerDependencyNotResolved,
 		},
 		{
-			Name:             "Nothing running, create depends on running",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerCreated,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerStatusNone,
-			SatisfiedStatus:  api.ContainerRunning,
-			ExpectedResolved: true,
+			Name:            "Nothing running, create depends on running",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerCreated,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerStatusNone,
+			SatisfiedStatus: api.ContainerRunning,
 		},
 		{
-			Name:             "Dependency created, pull depends on running",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerPulled,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerCreated,
-			SatisfiedStatus:  api.ContainerRunning,
-			ExpectedResolved: false,
+			Name:            "Dependency created, pull depends on running",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerPulled,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerCreated,
+			SatisfiedStatus: api.ContainerRunning,
+			ResolvedErr:     ErrContainerDependencyNotResolved,
 		},
 		{
-			Name:             "Dependency created, pull depends on resources provisioned",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerPulled,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerCreated,
-			SatisfiedStatus:  api.ContainerResourcesProvisioned,
-			ExpectedResolved: false,
+			Name:            "Dependency created, pull depends on resources provisioned",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerPulled,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerCreated,
+			SatisfiedStatus: api.ContainerResourcesProvisioned,
+			ResolvedErr:     ErrContainerDependencyNotResolved,
 		},
 		{
-			Name:             "Dependency running, pull depends on running",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerPulled,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerRunning,
-			SatisfiedStatus:  api.ContainerRunning,
-			ExpectedResolved: true,
+			Name:            "Dependency running, pull depends on running",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerPulled,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerRunning,
+			SatisfiedStatus: api.ContainerRunning,
 		},
 		{
-			Name:             "Dependency running, pull depends on resources provisioned",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerPulled,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerRunning,
-			SatisfiedStatus:  api.ContainerResourcesProvisioned,
-			ExpectedResolved: false,
+			Name:            "Dependency running, pull depends on resources provisioned",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerPulled,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerRunning,
+			SatisfiedStatus: api.ContainerResourcesProvisioned,
+			ResolvedErr:     ErrContainerDependencyNotResolved,
 		},
 		{
-			Name:             "Dependency resources provisioned, pull depends on resources provisioned",
-			TargetKnown:      api.ContainerStatusNone,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerPulled,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerResourcesProvisioned,
-			SatisfiedStatus:  api.ContainerResourcesProvisioned,
-			ExpectedResolved: true,
+			Name:            "Dependency resources provisioned, pull depends on resources provisioned",
+			TargetKnown:     api.ContainerStatusNone,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerPulled,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerResourcesProvisioned,
+			SatisfiedStatus: api.ContainerResourcesProvisioned,
 		},
 		{
-			Name:             "Dependency running, create depends on created",
-			TargetKnown:      api.ContainerPulled,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerCreated,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerRunning,
-			SatisfiedStatus:  api.ContainerCreated,
-			ExpectedResolved: true,
+			Name:            "Dependency running, create depends on created",
+			TargetKnown:     api.ContainerPulled,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerCreated,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerRunning,
+			SatisfiedStatus: api.ContainerCreated,
 		},
 		{
-			Name:             "Target running, create depends on running",
-			TargetKnown:      api.ContainerRunning,
-			TargetDesired:    api.ContainerRunning,
-			TargetNext:       api.ContainerRunning,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerRunning,
-			SatisfiedStatus:  api.ContainerCreated,
-			ExpectedResolved: true,
+			Name:            "Target running, create depends on running",
+			TargetKnown:     api.ContainerRunning,
+			TargetDesired:   api.ContainerRunning,
+			TargetNext:      api.ContainerRunning,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerRunning,
+			SatisfiedStatus: api.ContainerCreated,
 		},
 		{
-			Name:             "Target pulled, desired stopped",
-			TargetKnown:      api.ContainerPulled,
-			TargetDesired:    api.ContainerStopped,
-			TargetNext:       api.ContainerRunning,
-			DependencyName:   "container",
-			DependencyKnown:  api.ContainerStatusNone,
-			SatisfiedStatus:  api.ContainerCreated,
-			ExpectedResolved: true,
+			Name:            "Target pulled, desired stopped",
+			TargetKnown:     api.ContainerPulled,
+			TargetDesired:   api.ContainerStopped,
+			TargetNext:      api.ContainerRunning,
+			DependencyName:  "container",
+			DependencyKnown: api.ContainerStatusNone,
+			SatisfiedStatus: api.ContainerCreated,
 		},
 		// Note: Not all possible situations are tested here.  The only situations tested here are ones that are
 		// expected to reasonably happen at the time this code was written.  Other behavior is not expected to occur,
@@ -574,8 +568,9 @@ func TestVerifyTransitionDependenciesResolved(t *testing.T) {
 	for _, tc := range testcases {
 		t.Run(tc.Name, func(t *testing.T) {
 			target := &api.Container{
-				KnownStatusUnsafe:   tc.TargetKnown,
-				DesiredStatusUnsafe: tc.TargetDesired,
+				KnownStatusUnsafe:         tc.TargetKnown,
+				DesiredStatusUnsafe:       tc.TargetDesired,
+				TransitionDependenciesMap: make(map[api.ContainerStatus]api.TransitionDependencySet),
 			}
 			target.BuildContainerDependency(tc.DependencyName, tc.SatisfiedStatus, tc.TargetNext)
 			dep := &api.Container{
@@ -585,7 +580,7 @@ func TestVerifyTransitionDependenciesResolved(t *testing.T) {
 			containers := make(map[string]*api.Container)
 			containers[dep.Name] = dep
 			resolved := verifyTransitionDependenciesResolved(target, containers, nil)
-			assert.Equal(t, tc.ExpectedResolved, resolved)
+			assert.Equal(t, tc.ResolvedErr, resolved)
 		})
 	}
 }

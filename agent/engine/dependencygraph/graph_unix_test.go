@@ -29,7 +29,7 @@ func TestVerifyResourceDependenciesResolved(t *testing.T) {
 		TargetKnown      api.ContainerStatus
 		TargetDep        api.ContainerStatus
 		DependencyKnown  taskresource.ResourceStatus
-		SatisfiedStatus  taskresource.ResourceStatus
+		RequiredStatus   taskresource.ResourceStatus
 		ExpectedResolved bool
 	}{
 		{
@@ -37,7 +37,7 @@ func TestVerifyResourceDependenciesResolved(t *testing.T) {
 			TargetKnown:      api.ContainerStatusNone,
 			TargetDep:        api.ContainerPulled,
 			DependencyKnown:  taskresource.ResourceStatus(cgroup.CgroupStatusNone),
-			SatisfiedStatus:  taskresource.ResourceStatus(cgroup.CgroupCreated),
+			RequiredStatus:   taskresource.ResourceStatus(cgroup.CgroupCreated),
 			ExpectedResolved: false,
 		},
 		{
@@ -45,7 +45,7 @@ func TestVerifyResourceDependenciesResolved(t *testing.T) {
 			TargetKnown:      api.ContainerStatusNone,
 			TargetDep:        api.ContainerPulled,
 			DependencyKnown:  taskresource.ResourceStatus(cgroup.CgroupCreated),
-			SatisfiedStatus:  taskresource.ResourceStatus(cgroup.CgroupCreated),
+			RequiredStatus:   taskresource.ResourceStatus(cgroup.CgroupCreated),
 			ExpectedResolved: true,
 		},
 		{
@@ -53,7 +53,7 @@ func TestVerifyResourceDependenciesResolved(t *testing.T) {
 			TargetKnown:      api.ContainerStatusNone,
 			TargetDep:        api.ContainerCreated,
 			DependencyKnown:  taskresource.ResourceStatus(cgroup.CgroupStatusNone),
-			SatisfiedStatus:  taskresource.ResourceStatus(cgroup.CgroupCreated),
+			RequiredStatus:   taskresource.ResourceStatus(cgroup.CgroupCreated),
 			ExpectedResolved: true,
 		},
 	}
@@ -62,9 +62,10 @@ func TestVerifyResourceDependenciesResolved(t *testing.T) {
 			cgroupResource := &cgroup.CgroupResource{}
 			cgroupResource.SetKnownStatus(tc.DependencyKnown)
 			target := &api.Container{
-				KnownStatusUnsafe: tc.TargetKnown,
+				KnownStatusUnsafe:         tc.TargetKnown,
+				TransitionDependenciesMap: make(map[api.ContainerStatus]api.TransitionDependencySet),
 			}
-			target.BuildResourceDependency("cgroup", tc.SatisfiedStatus, tc.TargetDep)
+			target.BuildResourceDependency("cgroup", tc.RequiredStatus, tc.TargetDep)
 			resources := make(map[string]taskresource.TaskResource)
 			resources[cgroupResource.GetName()] = cgroupResource
 			resolved := verifyResourceDependenciesResolved(target, resources)
