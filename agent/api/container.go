@@ -583,9 +583,3 @@ func (c *Container) BuildResourceDependency(resourceName string,
 	deps.ResourceDependencies = append(deps.ResourceDependencies, resourceDep)
 	c.TransitionDependenciesMap[dependentStatus] = deps
 }
-
-func (c *Container) initializeDependenciesMap() {
-	if c.TransitionDependenciesMap == nil {
-		c.TransitionDependenciesMap = make(map[ContainerStatus]TransitionDependencySet)
-	}
-}

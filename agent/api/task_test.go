@@ -545,6 +545,9 @@ func TestPostUnmarshalTaskWithEmptyVolumes(t *testing.T) {
 	task, err := TaskFromACS(&taskFromACS, &ecsacs.PayloadMessage{SeqNum: &seqNum})
 	assert.Nil(t, err, "Should be able to handle acs task")
 	assert.Equal(t, 2, len(task.Containers)) // before PostUnmarshalTask
+	for _, container := range task.Containers {
+		container.TransitionDependenciesMap = make(map[ContainerStatus]TransitionDependencySet)
+	}
 	cfg := config.Config{}
 	task.PostUnmarshalTask(&cfg, nil)
 

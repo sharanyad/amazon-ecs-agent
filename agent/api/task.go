@@ -159,17 +159,10 @@ type Task struct {
 func (task *Task) PostUnmarshalTask(cfg *config.Config, credentialsManager credentials.Manager) {
 	// TODO, add rudimentary plugin support and call any plugins that want to
 	// hook into this
-	task.initializeContainerDependenciesMap()
 	task.adjustForPlatform(cfg)
 	task.initializeEmptyVolumes()
 	task.initializeCredentialsEndpoint(credentialsManager)
 	task.addNetworkResourceProvisioningDependency(cfg)
-}
-
-func (task *Task) initializeContainerDependenciesMap() {
-	for _, c := range task.Containers {
-		c.initializeDependenciesMap()
-	}
 }
 
 func (task *Task) initializeEmptyVolumes() {

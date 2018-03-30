@@ -88,7 +88,6 @@ func TestPostUnmarshalWindowsCanonicalPaths(t *testing.T) {
 						SourceVolume:  "sourceVolume",
 					},
 				},
-				TransitionDependenciesMap: make(map[ContainerStatus]TransitionDependencySet),
 			},
 		},
 		Volumes: []TaskVolume{
