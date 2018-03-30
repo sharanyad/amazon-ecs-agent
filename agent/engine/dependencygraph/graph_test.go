@@ -15,11 +15,14 @@
 package dependencygraph
 
 import (
+	"fmt"
 	"testing"
 
-	"fmt"
-
 	"github.com/aws/amazon-ecs-agent/agent/api"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource/mocks"
+
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -581,6 +584,64 @@ func TestVerifyTransitionDependenciesResolved(t *testing.T) {
 			containers[dep.Name] = dep
 			resolved := verifyTransitionDependenciesResolved(target, containers, nil)
 			assert.Equal(t, tc.ResolvedErr, resolved)
+		})
+	}
+}
+
+func TestVerifyResourceDependenciesResolved(t *testing.T) {
+	testcases := []struct {
+		Name             string
+		TargetKnown      api.ContainerStatus
+		TargetDep        api.ContainerStatus
+		DependencyKnown  taskresource.ResourceStatus
+		RequiredStatus   taskresource.ResourceStatus
+		ExpectedResolved bool
+	}{
+		{
+			Name:             "resource none,container pull depends on resource created",
+			TargetKnown:      api.ContainerStatusNone,
+			TargetDep:        api.ContainerPulled,
+			DependencyKnown:  taskresource.ResourceStatus(0),
+			RequiredStatus:   taskresource.ResourceStatus(1),
+			ExpectedResolved: false,
+		},
+		{
+			Name:             "resource created,container pull depends on resource created",
+			TargetKnown:      api.ContainerStatusNone,
+			TargetDep:        api.ContainerPulled,
+			DependencyKnown:  taskresource.ResourceStatus(1),
+			RequiredStatus:   taskresource.ResourceStatus(1),
+			ExpectedResolved: true,
+		},
+		{
+			Name:             "resource none,container create depends on resource created",
+			TargetKnown:      api.ContainerStatusNone,
+			TargetDep:        api.ContainerCreated,
+			DependencyKnown:  taskresource.ResourceStatus(0),
+			RequiredStatus:   taskresource.ResourceStatus(1),
+			ExpectedResolved: true,
+		},
+	}
+	for _, tc := range testcases {
+		t.Run(tc.Name, func(t *testing.T) {
+			resourceName := "resource"
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockResource := mock_taskresource.NewMockTaskResource(ctrl)
+			gomock.InOrder(
+				mockResource.EXPECT().SetKnownStatus(tc.DependencyKnown),
+				mockResource.EXPECT().GetKnownStatus().Return(tc.DependencyKnown).AnyTimes(),
+			)
+			mockResource.SetKnownStatus(tc.DependencyKnown)
+			target := &api.Container{
+				KnownStatusUnsafe:         tc.TargetKnown,
+				TransitionDependenciesMap: make(map[api.ContainerStatus]api.TransitionDependencySet),
+			}
+			target.BuildResourceDependency(resourceName, tc.RequiredStatus, tc.TargetDep)
+			resources := make(map[string]taskresource.TaskResource)
+			resources[resourceName] = mockResource
+			resolved := verifyResourceDependenciesResolved(target, resources)
+			assert.Equal(t, tc.ExpectedResolved, resolved)
 		})
 	}
 }
