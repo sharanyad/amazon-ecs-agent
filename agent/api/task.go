@@ -867,6 +867,7 @@ func (task *Task) UpdateStatus() bool {
 func (task *Task) UpdateDesiredStatus() {
 	task.updateTaskDesiredStatus()
 	task.updateContainerDesiredStatus()
+	task.updateResourceDesiredStatus()
 }
 
 // updateTaskDesiredStatus determines what status the task should properly be at based on the containers' statuses
@@ -895,6 +896,25 @@ func (task *Task) updateContainerDesiredStatus() {
 		taskDesiredStatusToContainerStatus := taskDesiredStatus.ContainerStatus(c.GetSteadyStateStatus())
 		if c.GetDesiredStatus() < taskDesiredStatusToContainerStatus {
 			c.SetDesiredStatus(taskDesiredStatusToContainerStatus)
+		}
+	}
+}
+
+// updateResourceDesiredStatus sets all resources' desired status's depending on the
+// task's desired status
+// TODO: Create a mapping of resource status to the corresponding task status and use it here
+func (task *Task) updateResourceDesiredStatus() {
+	for _, r := range task.Resources {
+		taskDesiredStatus := task.GetDesiredStatus()
+		if taskDesiredStatus == TaskRunning {
+			if r.GetDesiredStatus() < r.SteadyState() {
+				r.SetDesiredStatus(r.SteadyState())
+			}
+		} else {
+			// Task desired status is stopped
+			if r.GetDesiredStatus() < r.TerminalStatus() {
+				r.SetDesiredStatus(r.TerminalStatus())
+			}
 		}
 	}
 }

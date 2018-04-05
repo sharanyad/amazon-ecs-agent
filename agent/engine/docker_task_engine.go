@@ -33,6 +33,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/resources"
 	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	utilsync "github.com/aws/amazon-ecs-agent/agent/utils/sync"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
@@ -444,6 +445,14 @@ func (engine *DockerTaskEngine) deleteTask(task *api.Task, handleCleanupDone cha
 		if err != nil {
 			seelog.Warnf("Task engine [%s]: unable to cleanup platform resources: %v",
 				task.Arn, err)
+		}
+	}
+
+	for _, resource := range task.Resources {
+		err := resource.Cleanup()
+		if err != nil {
+			seelog.Warnf("Task engine [%s]: unable to cleanup resource %s: %v",
+				task.Arn, resource.GetName(), err)
 		}
 	}
 
@@ -864,7 +873,6 @@ func (engine *DockerTaskEngine) startContainer(task *api.Task, container *api.Co
 	}
 	dockerContainerMD := client.StartContainer(dockerContainer.DockerID, engine.cfg.ContainerStartTimeout)
 
-
 	// Get metadata through container inspection and available task information then write this to the metadata file
 	// Performs this in the background to avoid delaying container start
 	// TODO: Add a state to the api.Container for the status of the metadata file (Whether it needs update) and
@@ -1042,7 +1050,7 @@ func (engine *DockerTaskEngine) updateTaskUnsafe(task *api.Task, update *api.Tas
 }
 
 // transitionContainer calls applyContainerState, and then notifies the managed
-// task of the change. transitionContainer is called by progressContainers and
+// task of the change. transitionContainer is called by progressTask and
 // by handleStoppedToRunningContainerTransition.
 func (engine *DockerTaskEngine) transitionContainer(task *api.Task, container *api.Container, to api.ContainerStatus) {
 	// Let docker events operate async so that we can continue to handle ACS / other requests
@@ -1089,6 +1097,39 @@ func (engine *DockerTaskEngine) applyContainerState(task *api.Task, container *a
 // to try and move the task to that desired state.
 func (engine *DockerTaskEngine) transitionFunctionMap() map[api.ContainerStatus]transitionApplyFunc {
 	return engine.containerStatusToTransitionFunction
+}
+
+// transitionResource calls applyResourceState, and then notifies the managed
+// task of the change. transitionResource is called by progressTask
+func (engine *DockerTaskEngine) transitionResource(task *api.Task, resource taskresource.TaskResource, to taskresource.ResourceStatus) {
+	err := engine.applyResourceState(task, resource, to)
+
+	engine.processTasks.RLock()
+	managedTask, ok := engine.managedTasks[task.Arn]
+	engine.processTasks.RUnlock()
+	if ok {
+		managedTask.handleResourceChange(resource, to, err)
+	}
+}
+
+// applyResourceState moves the resource to the given state by calling the
+// function defined in the transitionFunctionMap for the state
+func (engine *DockerTaskEngine) applyResourceState(task *api.Task, resource taskresource.TaskResource, nextState taskresource.ResourceStatus) error {
+	ok, err := resource.TransitionFunction(nextState)
+	if !ok {
+		seelog.Criticalf("Task engine [%s]: unsupported desired state transition for resource [%s]: %s",
+			task.Arn, resource.GetName(), nextState.String())
+		return errors.New("Impossible to transition to the resource state due to lack of transition function")
+	}
+	if err != nil {
+		seelog.Infof("Task engine [%s]: error transitioning resource [%s] to [%s]: %v",
+			task.Arn, resource.GetName(), nextState.String(), err)
+	} else {
+		seelog.Debugf("Task engine [%s]: transitioned resource [%s] to [%s]",
+			task.Arn, resource.GetName(), nextState.String())
+		engine.saver.Save()
+	}
+	return err
 }
 
 type transitionApplyFunc (func(*api.Task, *api.Container) DockerContainerMetadata)
