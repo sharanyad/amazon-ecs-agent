@@ -29,6 +29,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/resources"
 	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	utilsync "github.com/aws/amazon-ecs-agent/agent/utils/sync"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 
@@ -52,6 +53,7 @@ var (
 	_stoppedSentWaitInterval       = stoppedSentWaitInterval
 	_maxStoppedWaitTimes           = int(maxStoppedWaitTimes)
 	taskNotWaitForSteadyStateError = errors.New("managed task: steady state check context is nil")
+	ResourcePastDesiredStatusErr   = errors.New("resource transition: resource status is equal or greater than desired status")
 )
 
 type acsTaskUpdate struct {
@@ -71,6 +73,13 @@ type acsTransition struct {
 // containerTransition defines the struct for a container to transition
 type containerTransition struct {
 	nextState      api.ContainerStatus
+	actionRequired bool
+	reason         error
+}
+
+// resourceTransition defines the struct for a resource to transition
+type resourceTransition struct {
+	nextState      taskresource.ResourceStatus
 	actionRequired bool
 	reason         error
 }
@@ -207,7 +216,7 @@ func (mtask *managedTask) overseeTask() {
 				}
 				seelog.Infof("Managed task [%s]: Cgroup resource set up for task complete", mtask.Arn)
 			}
-			mtask.progressContainers()
+			mtask.progressTask()
 		}
 
 		// If we reach this point, we've changed the task in some way.
@@ -423,6 +432,37 @@ func (mtask *managedTask) handleContainerChange(containerChange dockerContainerC
 		mtask.Arn, container.Name, mtask.GetDesiredStatus().String())
 }
 
+// handleResourceChange updates a resource's known status
+func (mtask *managedTask) handleResourceChange(res taskresource.TaskResource,
+	status taskresource.ResourceStatus,
+	err error) {
+	// locate the resource
+	found := mtask.isResourceFound(res)
+	if !found {
+		seelog.Criticalf("Managed task [%s]: state error; invoked with another task's resource [%s]!",
+			mtask.Arn, res.GetName())
+		return
+	}
+
+	currentKnownStatus := res.GetKnownStatus()
+	if status <= currentKnownStatus {
+		seelog.Infof("Managed task [%s]: redundant resource state change. %s to %s, but already %s",
+			mtask.Arn, res.GetName(), status.String(), res.GetKnownStatus().String())
+		return
+	}
+
+	if err == nil {
+		res.SetKnownStatus(status)
+		return
+	}
+	if status == res.SteadyState() {
+		seelog.Criticalf("Managed task [%s]: Error while creating resource %s, setting the task's desired status to STOPPED",
+			mtask.Arn, res.GetName())
+		// error while creation; moving task to stopped
+		mtask.SetDesiredStatus(api.TaskStopped)
+	}
+}
+
 func (mtask *managedTask) emitTaskEvent(task *api.Task, reason string) {
 	event, err := api.NewTaskStateChangeEvent(task, reason)
 	if err != nil {
@@ -473,6 +513,17 @@ func (mtask *managedTask) isContainerFound(container *api.Container) bool {
 	found := false
 	for _, c := range mtask.Containers {
 		if container == c {
+			found = true
+			break
+		}
+	}
+	return found
+}
+
+func (mtask *managedTask) isResourceFound(res taskresource.TaskResource) bool {
+	found := false
+	for _, r := range mtask.Resources {
+		if res == r {
 			found = true
 			break
 		}
@@ -624,45 +675,61 @@ func (mtask *managedTask) handleContainerStoppedTransitionError(event dockerapi.
 	return true
 }
 
-// progressContainers tries to step forwards all containers that are able to be
+// progressTask tries to step forwards all containers and resources that are able to be
 // transitioned in the task's current state.
 // It will continue listening to events from all channels while it does so, but
 // none of those changes will be acted upon until this set of requests to
 // docker completes.
 // Container changes may also prompt the task status to change as well.
-func (mtask *managedTask) progressContainers() {
-	seelog.Debugf("Managed task [%s]: progressing containers in task", mtask.Arn)
+func (mtask *managedTask) progressTask() {
+	seelog.Debugf("Managed task [%s]: progressing containers and resources in task", mtask.Arn)
 	// max number of transitions length to ensure writes will never block on
 	// these and if we exit early transitions can exit the goroutine and it'll
 	// get GC'd eventually
-	transitionChange := make(chan struct{}, len(mtask.Containers))
-	transitionChangeContainer := make(chan string, len(mtask.Containers))
+	transitionChange := make(chan struct{}, len(mtask.Containers)+len(mtask.Resources))
+	transitionChangeEntity := make(chan string, len(mtask.Containers)+len(mtask.Resources))
 
-	anyCanTransition, transitions, reasons := mtask.startContainerTransitions(
+	anyResourceTransition, resTransitions := mtask.startResourceTransitions(
+		func(resource taskresource.TaskResource, nextStatus taskresource.ResourceStatus) {
+			mtask.engine.transitionResource(mtask.Task, resource, nextStatus)
+			transitionChange <- struct{}{}
+			transitionChangeEntity <- resource.GetName()
+		})
+
+	anyContainerTransition, contTransitions, contReasons := mtask.startContainerTransitions(
 		func(container *api.Container, nextStatus api.ContainerStatus) {
 			mtask.engine.transitionContainer(mtask.Task, container, nextStatus)
 			transitionChange <- struct{}{}
-			transitionChangeContainer <- container.Name
+			transitionChangeEntity <- container.Name
 		})
 
-	if !anyCanTransition {
-		if !mtask.waitForExecutionCredentialsFromACS(reasons) {
+	if !anyContainerTransition && !anyResourceTransition {
+		if !mtask.waitForExecutionCredentialsFromACS(contReasons) {
 			mtask.onContainersUnableToTransitionState()
 		}
-		return
 	}
 
-	// We've kicked off one or more transitions, wait for them to
-	// complete, but keep reading events as we do. in fact, we have to for
-	// transitions to complete
-	mtask.waitForContainerTransition(transitions, transitionChange, transitionChangeContainer)
+	// combine the resource and container transitions
+	transitions := make(map[string]string)
+	for k, v := range resTransitions {
+		transitions[k] = v.String()
+	}
+	for k, v := range contTransitions {
+		transitions[k] = v.String()
+	}
 
-	// update the task status
-	changed := mtask.UpdateStatus()
-	if changed {
-		seelog.Debugf("Managed task [%s]: container change also resulted in task change", mtask.Arn)
-		// If knownStatus changed, let it be known
-		mtask.emitTaskEvent(mtask.Task, "")
+	if anyContainerTransition || anyResourceTransition {
+		// We've kicked off one or more transitions, wait for them to
+		// complete, but keep reading events as we do. in fact, we have to for
+		// transitions to complete
+		mtask.waitForTransition(transitions, transitionChange, transitionChangeEntity)
+		// update the task status
+		changed := mtask.UpdateStatus()
+		if changed {
+			seelog.Debugf("Managed task [%s]: container change also resulted in task change", mtask.Arn)
+			// If knownStatus changed, let it be known
+			mtask.emitTaskEvent(mtask.Task, "")
+		}
 	}
 }
 
@@ -732,7 +799,41 @@ func (mtask *managedTask) startContainerTransitions(transitionFunc containerTran
 	return anyCanTransition, transitions, reasons
 }
 
+// startResourceTransitions steps through each resource in the task and calls
+// the passed transition function when a transition should occur
+func (mtask *managedTask) startResourceTransitions(transitionFunc resourceTransitionFunc) (bool, map[string]taskresource.ResourceStatus) {
+	anyCanTransition := false
+	transitions := make(map[string]taskresource.ResourceStatus)
+	for _, res := range mtask.Resources {
+		transition := mtask.resourceNextState(res)
+		if transition.reason != nil {
+			// resource can't be transitioned
+			continue
+		}
+
+		// If the resource is already in a transition, skip
+		if transition.actionRequired && !res.SetAppliedStatus(transition.nextState) {
+			// At least one resource is able to be moved forwards, so we're not deadlocked
+			anyCanTransition = true
+			continue
+		}
+
+		// At least one resource is able to be move forwards, so we're not deadlocked
+		anyCanTransition = true
+
+		if !transition.actionRequired {
+			go mtask.handleResourceChange(res, transition.nextState, nil)
+		}
+		transitions[res.GetName()] = transition.nextState
+		go transitionFunc(res, transition.nextState)
+	}
+
+	return anyCanTransition, transitions
+}
+
 type containerTransitionFunc func(container *api.Container, nextStatus api.ContainerStatus)
+
+type resourceTransitionFunc func(resource taskresource.TaskResource, nextStatus taskresource.ResourceStatus)
 
 // containerNextState determines the next state a container should go to.
 // It returns a transition struct including the information:
@@ -802,6 +903,45 @@ func (mtask *managedTask) containerNextState(container *api.Container) *containe
 	}
 }
 
+func (mtask *managedTask) resourceNextState(resource taskresource.TaskResource) *resourceTransition {
+	resKnownStatus := resource.GetKnownStatus()
+	resDesiredStatus := resource.GetDesiredStatus()
+
+	if resKnownStatus == resDesiredStatus {
+		seelog.Debugf("Managed task [%s]: resource [%s] at desired status: %s",
+			mtask.Arn, resource.GetName(), resDesiredStatus.String())
+		return &resourceTransition{
+			nextState:      taskresource.ResourceStatus(0), // set to none
+			actionRequired: false,
+			reason:         ResourcePastDesiredStatusErr,
+		}
+	}
+
+	if resKnownStatus > resDesiredStatus {
+		seelog.Debugf("Managed task [%s]: resource [%s] has already transitioned beyond desired status(%s): %s",
+			mtask.Arn, resource.GetName(), resKnownStatus.String(), resDesiredStatus.String())
+		return &resourceTransition{
+			nextState:      taskresource.ResourceStatus(0), // set to none
+			actionRequired: false,
+			reason:         ResourcePastDesiredStatusErr,
+		}
+	}
+
+	var nextState taskresource.ResourceStatus
+	if resource.DesiredTerminal() {
+		nextState = resource.TerminalStatus()
+		return &resourceTransition{
+			nextState:      nextState,
+			actionRequired: false, // since resource cleanup will be done while sweeping task
+		}
+	}
+	nextState = resource.GetNextKnownStateProgression()
+	return &resourceTransition{
+		nextState:      nextState,
+		actionRequired: true,
+	}
+}
+
 func (mtask *managedTask) onContainersUnableToTransitionState() {
 	seelog.Criticalf("Managed task [%s]: task in a bad state; it's not steadystate but no containers want to transition",
 		mtask.Arn)
@@ -818,20 +958,20 @@ func (mtask *managedTask) onContainersUnableToTransitionState() {
 	}
 }
 
-func (mtask *managedTask) waitForContainerTransition(transitions map[string]api.ContainerStatus,
+func (mtask *managedTask) waitForTransition(transitions map[string]string,
 	transition <-chan struct{},
-	transitionChangeContainer <-chan string) {
+	transitionChangeEntity <-chan string) {
 	// There could be multiple transitions, but we just need to wait for one of them
-	// to ensure that there is at least one container can be processed in the next
-	// progressContainers. This is done by waiting for one transition/acs/docker message.
+	// to ensure that there is at least one container or resource can be processed in the next
+	// progressTask call. This is done by waiting for one transition/acs/docker message.
 	if !mtask.waitEvent(transition) {
 		seelog.Debugf("Managed task [%s]: received non-transition events", mtask.Arn)
 		return
 	}
-	transitionedContainer := <-transitionChangeContainer
-	seelog.Debugf("Managed task [%s]: transition for container[%s] finished",
-		mtask.Arn, transitionedContainer)
-	delete(transitions, transitionedContainer)
+	transitionedEntity := <-transitionChangeEntity
+	seelog.Debugf("Managed task [%s]: transition for [%s] finished",
+		mtask.Arn, transitionedEntity)
+	delete(transitions, transitionedEntity)
 	seelog.Debugf("Managed task [%s]: still waiting for: %v", mtask.Arn, transitions)
 }
 
