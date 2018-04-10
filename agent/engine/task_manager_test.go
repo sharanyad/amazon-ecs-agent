@@ -21,6 +21,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource/cgroup"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource/mocks"
 	utilsync "github.com/aws/amazon-ecs-agent/agent/utils/sync"
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
@@ -746,9 +749,9 @@ func TestWaitForContainerTransitionsForNonTerminalTask(t *testing.T) {
 	// populate the transitions map with transitions for two
 	// containers. We expect two sets of events to be consumed
 	// by `waitForContainerTransition`
-	transitions := make(map[string]api.ContainerStatus)
-	transitions[firstContainerName] = api.ContainerRunning
-	transitions[secondContainerName] = api.ContainerRunning
+	transitions := make(map[string]string)
+	transitions[firstContainerName] = api.ContainerRunning.String()
+	transitions[secondContainerName] = api.ContainerRunning.String()
 
 	go func() {
 		// Send "transitions completed" messages. These are being
@@ -760,9 +763,9 @@ func TestWaitForContainerTransitionsForNonTerminalTask(t *testing.T) {
 		transitionChangeContainer <- firstContainerName
 	}()
 
-	// waitForContainerTransition will block until it receives events
+	// waitForTransition will block until it receives events
 	// sent by the go routine defined above
-	task.waitForContainerTransition(transitions, transitionChange, transitionChangeContainer)
+	task.waitForTransition(transitions, transitionChange, transitionChangeContainer)
 }
 
 // TestWaitForContainerTransitionsForTerminalTask verifies that the
@@ -789,9 +792,9 @@ func TestWaitForContainerTransitionsForTerminalTask(t *testing.T) {
 
 	firstContainerName := "container1"
 	secondContainerName := "container2"
-	transitions := make(map[string]api.ContainerStatus)
-	transitions[firstContainerName] = api.ContainerPulled
-	transitions[secondContainerName] = api.ContainerPulled
+	transitions := make(map[string]string)
+	transitions[firstContainerName] = api.ContainerPulled.String()
+	transitions[secondContainerName] = api.ContainerPulled.String()
 
 	// Event though there are two keys in the transitions map, send
 	// only one event. This tests that `waitForContainerTransition` doesn't
@@ -800,7 +803,7 @@ func TestWaitForContainerTransitionsForTerminalTask(t *testing.T) {
 		transitionChange <- struct{}{}
 		transitionChangeContainer <- secondContainerName
 	}()
-	task.waitForContainerTransition(transitions, transitionChange, transitionChangeContainer)
+	task.waitForTransition(transitions, transitionChange, transitionChangeContainer)
 }
 
 func TestOnContainersUnableToTransitionStateForDesiredStoppedTask(t *testing.T) {
@@ -953,6 +956,7 @@ func TestCleanupTask(t *testing.T) {
 	mockState := mock_dockerstate.NewMockTaskEngineState(ctrl)
 	mockClient := NewMockDockerClient(ctrl)
 	mockImageManager := NewMockImageManager(ctrl)
+	mockResource := mock_taskresource.NewMockTaskResource(ctrl)
 	defer ctrl.Finish()
 
 	ctx, cancel := context.WithCancel(context.TODO())
@@ -975,6 +979,7 @@ func TestCleanupTask(t *testing.T) {
 		cfg:            taskEngine.cfg,
 		saver:          taskEngine.saver,
 	}
+	mTask.Task.Resources = []taskresource.TaskResource{mockResource}
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskStopped)
 	container := mTask.Containers[0]
@@ -997,6 +1002,7 @@ func TestCleanupTask(t *testing.T) {
 	mockClient.EXPECT().RemoveContainer(dockerContainer.DockerName, gomock.Any()).Return(nil)
 	mockImageManager.EXPECT().RemoveContainerReferenceFromImageState(container).Return(nil)
 	mockState.EXPECT().RemoveTask(mTask.Task)
+	mockResource.EXPECT().Cleanup()
 	mTask.cleanupTask(taskStoppedDuration)
 }
 
@@ -1486,6 +1492,302 @@ func TestWaitForHostResources(t *testing.T) {
 
 	taskStopWG.Done(1)
 	waitForHostResourcesWG.Wait()
+}
+
+func TestHandleResourceChange(t *testing.T) {
+	testCases := []struct {
+		Name               string
+		StatusChange       taskresource.ResourceStatus
+		Err                error
+		KnownStatus        taskresource.ResourceStatus
+		ChangedKnownStatus taskresource.ResourceStatus
+		TaskDesiredStatus  api.TaskStatus
+	}{
+		{
+			Name:               "error while steady state transition",
+			StatusChange:       taskresource.ResourceCreated,
+			Err:                errors.New("transition error"),
+			KnownStatus:        taskresource.ResourceStatusNone,
+			ChangedKnownStatus: taskresource.ResourceStatusNone,
+			TaskDesiredStatus:  api.TaskStopped,
+		},
+		{
+			Name:               "steady state transition",
+			StatusChange:       taskresource.ResourceCreated,
+			Err:                nil,
+			KnownStatus:        taskresource.ResourceStatusNone,
+			ChangedKnownStatus: taskresource.ResourceCreated,
+			TaskDesiredStatus:  api.TaskRunning,
+		},
+		{
+			Name:               "steady state transition already done",
+			StatusChange:       taskresource.ResourceCreated,
+			Err:                nil,
+			KnownStatus:        taskresource.ResourceCreated,
+			ChangedKnownStatus: taskresource.ResourceCreated,
+			TaskDesiredStatus:  api.TaskRunning,
+		},
+		{
+			Name:               "transition state less than known status",
+			StatusChange:       taskresource.ResourceStatusNone,
+			Err:                nil,
+			KnownStatus:        taskresource.ResourceCreated,
+			ChangedKnownStatus: taskresource.ResourceCreated,
+			TaskDesiredStatus:  api.TaskRunning,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			res := cgroup.CgroupResource{}
+			res.SetKnownStatus(tc.KnownStatus)
+			mtask := managedTask{
+				Task: &api.Task{
+					Arn:                 "task1",
+					Resources:           []taskresource.TaskResource{&res},
+					DesiredStatusUnsafe: api.TaskRunning,
+				},
+			}
+			mtask.handleResourceChange(&res, tc.StatusChange, tc.Err)
+			assert.Equal(t, tc.ChangedKnownStatus, res.GetKnownStatus())
+			assert.Equal(t, tc.TaskDesiredStatus, mtask.GetDesiredStatus())
+		})
+	}
+}
+
+func TestResourceNextState(t *testing.T) {
+	testCases := []struct {
+		Name             string
+		ResKnownStatus   taskresource.ResourceStatus
+		ResDesiredStatus taskresource.ResourceStatus
+		NextState        taskresource.ResourceStatus
+		Err              error
+		ActionRequired   bool
+	}{
+		{
+			Name:             "next state happy path",
+			ResKnownStatus:   taskresource.ResourceStatusNone,
+			ResDesiredStatus: taskresource.ResourceCreated,
+			NextState:        taskresource.ResourceCreated,
+			Err:              nil,
+			ActionRequired:   true,
+		},
+		{
+			Name:             "desired terminal",
+			ResKnownStatus:   taskresource.ResourceStatusNone,
+			ResDesiredStatus: taskresource.ResourceRemoved,
+			NextState:        taskresource.ResourceRemoved,
+			Err:              nil,
+			ActionRequired:   false,
+		},
+		{
+			Name:             "already transitioned to desired",
+			ResKnownStatus:   taskresource.ResourceCreated,
+			ResDesiredStatus: taskresource.ResourceCreated,
+			NextState:        taskresource.ResourceStatusNone,
+			Err:              ResourcePastDesiredStatusErr,
+			ActionRequired:   false,
+		},
+		{
+			Name:             "transitioned beyond desired",
+			ResKnownStatus:   taskresource.ResourceRemoved,
+			ResDesiredStatus: taskresource.ResourceCreated,
+			NextState:        taskresource.ResourceStatusNone,
+			Err:              ResourcePastDesiredStatusErr,
+			ActionRequired:   false,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			res := cgroup.CgroupResource{}
+			res.SetKnownStatus(tc.ResKnownStatus)
+			res.SetDesiredStatus(tc.ResDesiredStatus)
+			mtask := managedTask{
+				Task: &api.Task{},
+			}
+			transition := mtask.resourceNextState(&res)
+			assert.Equal(t, tc.NextState, transition.nextState)
+			assert.Equal(t, tc.Err, transition.err)
+			assert.Equal(t, tc.ActionRequired, transition.actionRequired)
+		})
+	}
+}
+
+func TestStartResourceTransitionsHappyPath(t *testing.T) {
+	testCases := []struct {
+		Name             string
+		ResKnownStatus   taskresource.ResourceStatus
+		ResDesiredStatus taskresource.ResourceStatus
+		TransitionStatus taskresource.ResourceStatus
+		StatusString     string
+		CanTransition    bool
+		TransitionsLen   int
+	}{
+		{
+			Name:             "none to created",
+			ResKnownStatus:   taskresource.ResourceStatusNone,
+			ResDesiredStatus: taskresource.ResourceCreated,
+			TransitionStatus: taskresource.ResourceCreated,
+			StatusString:     "CREATED",
+			CanTransition:    true,
+			TransitionsLen:   1,
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			res := &cgroup.CgroupResource{}
+			res.SetKnownStatus(tc.ResKnownStatus)
+			res.SetDesiredStatus(tc.ResDesiredStatus)
+
+			task := &managedTask{
+				Task: &api.Task{
+					Resources:           []taskresource.TaskResource{res},
+					DesiredStatusUnsafe: api.TaskRunning,
+				},
+			}
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			canTransition, transitions := task.startResourceTransitions(
+				func(resource taskresource.TaskResource, nextStatus taskresource.ResourceStatus) {
+					assert.Equal(t, nextStatus, tc.TransitionStatus)
+					wg.Done()
+				})
+			wg.Wait()
+			assert.Equal(t, tc.CanTransition, canTransition)
+			assert.Len(t, transitions, tc.TransitionsLen)
+			resTransition, ok := transitions["cgroup"]
+			assert.True(t, ok)
+			assert.Equal(t, resTransition, tc.StatusString)
+		})
+	}
+}
+
+func TestStartResourceTransitionsNotPossible(t *testing.T) {
+	res := &cgroup.CgroupResource{}
+	res.SetKnownStatus(taskresource.ResourceCreated)
+	res.SetDesiredStatus(taskresource.ResourceCreated)
+
+	task := &managedTask{
+		Task: &api.Task{
+			Resources:           []taskresource.TaskResource{res},
+			DesiredStatusUnsafe: api.TaskRunning,
+		},
+	}
+	canTransition, transitions := task.startResourceTransitions(
+		func(resource taskresource.TaskResource, nextStatus taskresource.ResourceStatus) {
+			t.Error("Transition function should not be called when no transitions are possible")
+		})
+	assert.False(t, canTransition)
+	assert.Empty(t, transitions)
+}
+
+func TestStartResourceTransitionsInvokesHandleResourceChange(t *testing.T) {
+	res := &cgroup.CgroupResource{}
+	res.SetKnownStatus(taskresource.ResourceCreated)
+	res.SetDesiredStatus(taskresource.ResourceRemoved)
+
+	task := &managedTask{
+		Task: &api.Task{
+			Resources:           []taskresource.TaskResource{res},
+			DesiredStatusUnsafe: api.TaskRunning,
+		},
+	}
+	canTransition, transitions := task.startResourceTransitions(
+		func(resource taskresource.TaskResource, nextStatus taskresource.ResourceStatus) {
+			t.Error("Transition function should not be called when no action is needed")
+		})
+	assert.True(t, canTransition)
+	assert.Empty(t, transitions)
+}
+
+func TestWaitForResourceTransition(t *testing.T) {
+	task := &managedTask{
+		Task: &api.Task{
+			Resources: []taskresource.TaskResource{},
+		},
+	}
+	transition := make(chan struct{}, 1)
+	transitionChangeResource := make(chan string, 1)
+	resName := "cgroup"
+	// populate the transitions map with transition for the
+	// resource. We expect the event to be consumed
+	// by `waitForTransition`
+	transitions := make(map[string]string)
+	transitions[resName] = "ResourceCreated"
+
+	go func() {
+		// Send "transition complete" message
+		transition <- struct{}{}
+		transitionChangeResource <- resName
+	}()
+
+	// waitForTransition will block until it receives the event
+	// sent by the go routine defined above
+	task.waitForTransition(transitions, transition, transitionChangeResource)
+}
+
+func TestApplyResourceStateHappyPath(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+	mockResource := mock_taskresource.NewMockTaskResource(ctrl)
+	mockSaver := mock_statemanager.NewMockStateManager(ctrl)
+	task := &managedTask{
+		Task: &api.Task{
+			Arn:       "arn",
+			Resources: []taskresource.TaskResource{},
+		},
+		engine: &DockerTaskEngine{},
+	}
+	task.engine.SetSaver(mockSaver)
+	gomock.InOrder(
+		mockResource.EXPECT().ApplyTransition(taskresource.ResourceCreated).Return(true, nil),
+		mockResource.EXPECT().GetName(),
+		mockResource.EXPECT().StatusString(taskresource.ResourceCreated),
+		mockSaver.EXPECT().Save(),
+	)
+	err := task.applyResourceState(mockResource, taskresource.ResourceCreated)
+	assert.Equal(t, nil, err)
+}
+
+func TestApplyResourceStateFails(t *testing.T) {
+	testCases := []struct {
+		Name                 string
+		ResStatus            taskresource.ResourceStatus
+		ValidStateTransition bool
+		Error                error
+	}{
+		{
+			Name:                 "no valid state transition",
+			ResStatus:            taskresource.ResourceStatusNone,
+			ValidStateTransition: false,
+			Error:                nil,
+		},
+		{
+			Name:                 "transition error",
+			ResStatus:            taskresource.ResourceCreated,
+			ValidStateTransition: true,
+			Error:                errors.New("transition failed"),
+		},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.Name, func(t *testing.T) {
+			ctrl := gomock.NewController(t)
+			defer ctrl.Finish()
+			mockResource := mock_taskresource.NewMockTaskResource(ctrl)
+			task := &managedTask{
+				Task: &api.Task{
+					Arn:       "arn",
+					Resources: []taskresource.TaskResource{},
+				},
+			}
+			gomock.InOrder(
+				mockResource.EXPECT().ApplyTransition(tc.ResStatus).
+					Return(tc.ValidStateTransition, tc.Error),
+				mockResource.EXPECT().GetName(),
+				mockResource.EXPECT().StatusString(tc.ResStatus),
+			)
+			assert.Error(t, task.applyResourceState(mockResource, tc.ResStatus))
+		})
+	}
 }
 
 func getTestConfig() config.Config {

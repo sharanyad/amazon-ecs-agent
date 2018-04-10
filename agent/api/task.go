@@ -904,14 +904,13 @@ func (task *Task) updateContainerDesiredStatus() {
 // task's desired status
 // TODO: Create a mapping of resource status to the corresponding task status and use it here
 func (task *Task) updateResourceDesiredStatus() {
+	taskDesiredStatus := task.GetDesiredStatus()
 	for _, r := range task.Resources {
-		taskDesiredStatus := task.GetDesiredStatus()
 		if taskDesiredStatus == TaskRunning {
 			if r.GetDesiredStatus() < r.SteadyState() {
 				r.SetDesiredStatus(r.SteadyState())
 			}
 		} else {
-			// Task desired status is stopped
 			if r.GetDesiredStatus() < r.TerminalStatus() {
 				r.SetDesiredStatus(r.TerminalStatus())
 			}

@@ -21,10 +21,15 @@ import (
 // ResourceStatus is an enumeration of valid states of task resource lifecycle
 type ResourceStatus int32
 
-// String returns a human readable string representation of this object
-func (rs ResourceStatus) String() string {
-	return "string" // Placeholder TODO: Change so that different resources' string functions are called
-}
+// This is currently used for testing purposes
+const (
+	// ResourceStatusNone is the zero state of a task resource
+	ResourceStatusNone ResourceStatus = iota
+	// ResourceCreated represents a task resource which has been created
+	ResourceCreated
+	// ResourceRemoved represents a task resource which has been cleaned up
+	ResourceRemoved
+)
 
 // TaskResource is a wrapper for task level resource methods we need
 type TaskResource interface {
@@ -54,13 +59,15 @@ type TaskResource interface {
 	TerminalStatus() ResourceStatus
 	// GetNextKnownStateProgression returns resource's next state progression
 	GetNextKnownStateProgression() ResourceStatus
-	// TransitionFunction calls the function required to move to the specified status
-	TransitionFunction(ResourceStatus) (bool, error)
+	// ApplyTransition calls the function required to move to the specified status
+	ApplyTransition(ResourceStatus) (bool, error)
 	// SteadyState returns the transition state of the resource defined as "ready"
 	SteadyState() ResourceStatus
 	// SetAppliedStatus sets the applied status of resource and returns whether
 	// the resource is already in a transition
 	SetAppliedStatus(status ResourceStatus) bool
+	// StatusString returns the string of the resource status
+	StatusString(status ResourceStatus) string
 
 	json.Marshaler
 	json.Unmarshaler

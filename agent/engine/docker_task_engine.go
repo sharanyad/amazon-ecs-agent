@@ -33,7 +33,6 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/resources"
 	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
-	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	utilsync "github.com/aws/amazon-ecs-agent/agent/utils/sync"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
@@ -1097,39 +1096,6 @@ func (engine *DockerTaskEngine) applyContainerState(task *api.Task, container *a
 // to try and move the task to that desired state.
 func (engine *DockerTaskEngine) transitionFunctionMap() map[api.ContainerStatus]transitionApplyFunc {
 	return engine.containerStatusToTransitionFunction
-}
-
-// transitionResource calls applyResourceState, and then notifies the managed
-// task of the change. transitionResource is called by progressTask
-func (engine *DockerTaskEngine) transitionResource(task *api.Task, resource taskresource.TaskResource, to taskresource.ResourceStatus) {
-	err := engine.applyResourceState(task, resource, to)
-
-	engine.processTasks.RLock()
-	managedTask, ok := engine.managedTasks[task.Arn]
-	engine.processTasks.RUnlock()
-	if ok {
-		managedTask.handleResourceChange(resource, to, err)
-	}
-}
-
-// applyResourceState moves the resource to the given state by calling the
-// function defined in the transitionFunctionMap for the state
-func (engine *DockerTaskEngine) applyResourceState(task *api.Task, resource taskresource.TaskResource, nextState taskresource.ResourceStatus) error {
-	ok, err := resource.TransitionFunction(nextState)
-	if !ok {
-		seelog.Criticalf("Task engine [%s]: unsupported desired state transition for resource [%s]: %s",
-			task.Arn, resource.GetName(), nextState.String())
-		return errors.New("Impossible to transition to the resource state due to lack of transition function")
-	}
-	if err != nil {
-		seelog.Infof("Task engine [%s]: error transitioning resource [%s] to [%s]: %v",
-			task.Arn, resource.GetName(), nextState.String(), err)
-	} else {
-		seelog.Debugf("Task engine [%s]: transitioned resource [%s] to [%s]",
-			task.Arn, resource.GetName(), nextState.String())
-		engine.saver.Save()
-	}
-	return err
 }
 
 type transitionApplyFunc (func(*api.Task, *api.Container) DockerContainerMetadata)
