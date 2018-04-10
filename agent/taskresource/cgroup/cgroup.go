@@ -22,7 +22,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
+	cgroupres "github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ioutilwrapper"
 	"github.com/cihub/seelog"
@@ -45,7 +45,7 @@ var (
 // CgroupResource represents Cgroup resource
 type CgroupResource struct {
 	taskARN                            string
-	control                            cgroup.Control
+	control                            cgroupres.Control
 	cgroupRoot                         string
 	cgroupMountPath                    string
 	resourceSpec                       specs.LinuxResources
@@ -54,14 +54,14 @@ type CgroupResource struct {
 	desiredStatusUnsafe                taskresource.ResourceStatus
 	knownStatusUnsafe                  taskresource.ResourceStatus
 	resourceStatusToTransitionFunction map[taskresource.ResourceStatus]func() error
-	AppliedStatus                      taskresource.ResourceStatus
+	appliedStatus                      taskresource.ResourceStatus
 	// lock is used for fields that are accessed and updated concurrently
 	lock sync.RWMutex
 }
 
 // NewCgroupResource is used to return an object that implements the Resource interface
 func NewCgroupResource(taskARN string,
-	control cgroup.Control,
+	control cgroupres.Control,
 	cgroupRoot string,
 	cgroupMountPath string,
 	resourceSpec specs.LinuxResources) *CgroupResource {
@@ -77,200 +77,197 @@ func NewCgroupResource(taskARN string,
 	return c
 }
 
-func (c *CgroupResource) initializeResourceStatusToTransitionFunction() {
+func (cgroup *CgroupResource) initializeResourceStatusToTransitionFunction() {
 	resourceStatusToTransitionFunction := map[taskresource.ResourceStatus]func() error{
-		taskresource.ResourceStatus(CgroupCreated): c.Create,
+		taskresource.ResourceStatus(CgroupCreated): cgroup.Create,
 	}
-	c.resourceStatusToTransitionFunction = resourceStatusToTransitionFunction
+	cgroup.resourceStatusToTransitionFunction = resourceStatusToTransitionFunction
 }
 
 // SetDesiredStatus safely sets the desired status of the resource
-func (c *CgroupResource) SetDesiredStatus(status taskresource.ResourceStatus) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (cgroup *CgroupResource) SetDesiredStatus(status taskresource.ResourceStatus) {
+	cgroup.lock.Lock()
+	defer cgroup.lock.Unlock()
 
-	c.desiredStatusUnsafe = status
+	cgroup.desiredStatusUnsafe = status
 }
 
 // GetDesiredStatus safely returns the desired status of the task
-func (c *CgroupResource) GetDesiredStatus() taskresource.ResourceStatus {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (cgroup *CgroupResource) GetDesiredStatus() taskresource.ResourceStatus {
+	cgroup.lock.RLock()
+	defer cgroup.lock.RUnlock()
 
-	return c.desiredStatusUnsafe
+	return cgroup.desiredStatusUnsafe
 }
 
 // GetName safely returns the name of the resource
-func (c *CgroupResource) GetName() string {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (cgroup *CgroupResource) GetName() string {
+	cgroup.lock.RLock()
+	defer cgroup.lock.RUnlock()
 
 	return resourceName
 }
 
 // DesiredTerminal returns true if the cgroup's desired status is REMOVED
-func (c *CgroupResource) DesiredTerminal() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (cgroup *CgroupResource) DesiredTerminal() bool {
+	cgroup.lock.RLock()
+	defer cgroup.lock.RUnlock()
 
-	return c.GetDesiredStatus() == taskresource.ResourceStatus(CgroupRemoved)
+	return cgroup.desiredStatusUnsafe == taskresource.ResourceStatus(CgroupRemoved)
 }
 
 // KnownCreated returns true if the cgroup's known status is CREATED
-func (c *CgroupResource) KnownCreated() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (cgroup *CgroupResource) KnownCreated() bool {
+	cgroup.lock.RLock()
+	defer cgroup.lock.RUnlock()
 
-	return c.GetKnownStatus() == taskresource.ResourceStatus(CgroupCreated)
+	return cgroup.knownStatusUnsafe == taskresource.ResourceStatus(CgroupCreated)
 }
 
 // TerminalStatus returns the last transition state of cgroup
-func (c *CgroupResource) TerminalStatus() taskresource.ResourceStatus {
+func (cgroup *CgroupResource) TerminalStatus() taskresource.ResourceStatus {
 	return taskresource.ResourceStatus(CgroupRemoved)
 }
 
 // GetNextKnownStateProgression returns the state that the resource should
 // progress to based on its `KnownState`.
-func (c *CgroupResource) GetNextKnownStateProgression() taskresource.ResourceStatus {
-	return c.GetKnownStatus() + 1
+func (cgroup *CgroupResource) GetNextKnownStateProgression() taskresource.ResourceStatus {
+	return cgroup.GetKnownStatus() + 1
 }
 
-// TransitionFunction calls the function required to move to the specified status
-func (c *CgroupResource) TransitionFunction(nextState taskresource.ResourceStatus) (bool, error) {
-	transitionFunc, ok := c.resourceStatusToTransitionFunction[nextState]
+// ApplyTransition calls the function required to move to the specified status
+func (cgroup *CgroupResource) ApplyTransition(nextState taskresource.ResourceStatus) (bool, error) {
+	transitionFunc, ok := cgroup.resourceStatusToTransitionFunction[nextState]
 	if !ok {
 		seelog.Criticalf("Cgroup Resource [%s]: unsupported desired state transition [%s]: %s",
-			c.taskARN, c.GetName(), nextState.String())
+			cgroup.taskARN, cgroup.GetName(), CgroupStatus(nextState).String())
 		return false, nil
 	}
 	return true, transitionFunc()
 }
 
 // SteadyState returns the transition state of the resource defined as "ready"
-func (c *CgroupResource) SteadyState() taskresource.ResourceStatus {
+func (cgroup *CgroupResource) SteadyState() taskresource.ResourceStatus {
 	return taskresource.ResourceStatus(CgroupCreated)
 }
 
 // SetKnownStatus safely sets the currently known status of the resource
-func (c *CgroupResource) SetKnownStatus(status taskresource.ResourceStatus) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (cgroup *CgroupResource) SetKnownStatus(status taskresource.ResourceStatus) {
+	cgroup.lock.Lock()
+	defer cgroup.lock.Unlock()
 
-	c.knownStatusUnsafe = status
-	c.updateAppliedStatusUnsafe(status)
+	cgroup.knownStatusUnsafe = status
+	cgroup.updateAppliedStatusUnsafe(status)
 }
 
 // updateAppliedStatusUnsafe updates the resource transitioning status
-func (c *CgroupResource) updateAppliedStatusUnsafe(knownStatus taskresource.ResourceStatus) {
-	if c.AppliedStatus == taskresource.ResourceStatus(CgroupStatusNone) {
+func (cgroup *CgroupResource) updateAppliedStatusUnsafe(knownStatus taskresource.ResourceStatus) {
+	if cgroup.appliedStatus == taskresource.ResourceStatus(CgroupStatusNone) {
 		return
 	}
 
 	// Check if the resource transition has already finished
-	if c.AppliedStatus <= knownStatus {
-		c.AppliedStatus = taskresource.ResourceStatus(CgroupStatusNone)
+	if cgroup.appliedStatus <= knownStatus {
+		cgroup.appliedStatus = taskresource.ResourceStatus(CgroupStatusNone)
 	}
 }
 
 // SetAppliedStatus sets the applied status of resource and returns whether
 // the resource is already in a transition
-func (c *CgroupResource) SetAppliedStatus(status taskresource.ResourceStatus) bool {
-	c.lock.Lock()
-	defer c.lock.Unlock()
+func (cgroup *CgroupResource) SetAppliedStatus(status taskresource.ResourceStatus) bool {
+	cgroup.lock.Lock()
+	defer cgroup.lock.Unlock()
 
-	if c.AppliedStatus != taskresource.ResourceStatus(CgroupStatusNone) {
+	if cgroup.appliedStatus != taskresource.ResourceStatus(CgroupStatusNone) {
 		// return false to indicate the set operation failed
 		return false
 	}
 
-	c.AppliedStatus = status
+	cgroup.appliedStatus = status
 	return true
 }
 
-// GetAppliedStatus returns the transitioning status of resource
-func (c *CgroupResource) GetAppliedStatus() taskresource.ResourceStatus {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+// GetKnownStatus safely returns the currently known status of the task
+func (cgroup *CgroupResource) GetKnownStatus() taskresource.ResourceStatus {
+	cgroup.lock.RLock()
+	defer cgroup.lock.RUnlock()
 
-	return c.AppliedStatus
+	return cgroup.knownStatusUnsafe
 }
 
-// GetKnownStatus safely returns the currently known status of the task
-func (c *CgroupResource) GetKnownStatus() taskresource.ResourceStatus {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.knownStatusUnsafe
+// StatusString returns the string of the cgroup resource status
+func (cgroup *CgroupResource) StatusString(status taskresource.ResourceStatus) string {
+	return CgroupStatus(status).String()
 }
 
 // SetCreatedAt sets the timestamp for resource's creation time
-func (c *CgroupResource) SetCreatedAt(createdAt time.Time) {
+func (cgroup *CgroupResource) SetCreatedAt(createdAt time.Time) {
 	if createdAt.IsZero() {
 		return
 	}
-	c.lock.Lock()
-	defer c.lock.Unlock()
+	cgroup.lock.Lock()
+	defer cgroup.lock.Unlock()
 
-	c.createdAt = createdAt
+	cgroup.createdAt = createdAt
 }
 
 // GetCreatedAt sets the timestamp for resource's creation time
-func (c *CgroupResource) GetCreatedAt() time.Time {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
+func (cgroup *CgroupResource) GetCreatedAt() time.Time {
+	cgroup.lock.RLock()
+	defer cgroup.lock.RUnlock()
 
-	return c.createdAt
+	return cgroup.createdAt
 }
 
 // Create creates cgroup root for the task
-func (c *CgroupResource) Create() error {
-	err := c.setupTaskCgroup()
+func (cgroup *CgroupResource) Create() error {
+	err := cgroup.setupTaskCgroup()
 	if err != nil {
-		seelog.Criticalf("Cgroup resource [%s]: unable to setup cgroup root: %v", c.taskARN, err)
+		seelog.Criticalf("Cgroup resource [%s]: unable to setup cgroup root: %v", cgroup.taskARN, err)
 		return err
 	}
 	return nil
 }
 
-func (c *CgroupResource) setupTaskCgroup() error {
-	cgroupRoot := c.cgroupRoot
-	seelog.Debugf("Cgroup resource [%s]: setting up cgroup at: %s", c.taskARN, cgroupRoot)
+func (cgroup *CgroupResource) setupTaskCgroup() error {
+	cgroupRoot := cgroup.cgroupRoot
+	seelog.Debugf("Cgroup resource [%s]: setting up cgroup at: %s", cgroup.taskARN, cgroupRoot)
 
-	if c.control.Exists(cgroupRoot) {
-		seelog.Debugf("Cgroup resource [%s]: cgroup at %s already exists, skipping creation", c.taskARN, cgroupRoot)
+	if cgroup.control.Exists(cgroupRoot) {
+		seelog.Debugf("Cgroup resource [%s]: cgroup at %s already exists, skipping creation", cgroup.taskARN, cgroupRoot)
 		return nil
 	}
 
-	cgroupSpec := cgroup.Spec{
+	cgroupSpec := cgroupres.Spec{
 		Root:  cgroupRoot,
-		Specs: &c.resourceSpec,
+		Specs: &cgroup.resourceSpec,
 	}
 
-	_, err := c.control.Create(&cgroupSpec)
+	_, err := cgroup.control.Create(&cgroupSpec)
 	if err != nil {
-		return errors.Wrapf(err, "cgroup resource [%s]: setup cgroup: unable to create cgroup at %s", c.taskARN, cgroupRoot)
+		return errors.Wrapf(err, "cgroup resource [%s]: setup cgroup: unable to create cgroup at %s", cgroup.taskARN, cgroupRoot)
 	}
 
 	// enabling cgroup memory hierarchy by doing 'echo 1 > memory.use_hierarchy'
-	memoryHierarchyPath := filepath.Join(c.cgroupMountPath, memorySubsystem, cgroupRoot, memoryUseHierarchy)
-	err = c.ioutil.WriteFile(memoryHierarchyPath, enableMemoryHierarchy, rootReadOnlyPermissions)
+	memoryHierarchyPath := filepath.Join(cgroup.cgroupMountPath, memorySubsystem, cgroupRoot, memoryUseHierarchy)
+	err = cgroup.ioutil.WriteFile(memoryHierarchyPath, enableMemoryHierarchy, rootReadOnlyPermissions)
 	if err != nil {
-		return errors.Wrapf(err, "cgroup resource [%s]: setup cgroup: unable to set use hierarchy flag", c.taskARN)
+		return errors.Wrapf(err, "cgroup resource [%s]: setup cgroup: unable to set use hierarchy flag", cgroup.taskARN)
 	}
 
 	return nil
 }
 
 // Cleanup removes the cgroup root created for the task
-func (c *CgroupResource) Cleanup() error {
-	err := c.control.Remove(c.cgroupRoot)
+func (cgroup *CgroupResource) Cleanup() error {
+	err := cgroup.control.Remove(cgroup.cgroupRoot)
 	// Explicitly handle cgroup deleted error
 	if err != nil {
 		if err == cgroups.ErrCgroupDeleted {
-			seelog.Warnf("Cgroup at %s has already been removed: %v", c.cgroupRoot, err)
+			seelog.Warnf("Cgroup at %s has already been removed: %v", cgroup.cgroupRoot, err)
 			return nil
 		}
-		return errors.Wrapf(err, "resource: cleanup cgroup: unable to remove cgroup at %s", c.cgroupRoot)
+		return errors.Wrapf(err, "resource: cleanup cgroup: unable to remove cgroup at %s", cgroup.cgroupRoot)
 	}
 	return nil
 }
@@ -285,21 +282,21 @@ type cgroupResourceJSON struct {
 }
 
 // MarshalJSON marshals CgroupResource object using duplicate struct CgroupResourceJSON
-func (c *CgroupResource) MarshalJSON() ([]byte, error) {
-	if c == nil {
+func (cgroup *CgroupResource) MarshalJSON() ([]byte, error) {
+	if cgroup == nil {
 		return nil, errors.New("cgroup resource is nil")
 	}
 	return json.Marshal(cgroupResourceJSON{
-		c.cgroupRoot,
-		c.cgroupMountPath,
-		c.GetCreatedAt(),
+		cgroup.cgroupRoot,
+		cgroup.cgroupMountPath,
+		cgroup.GetCreatedAt(),
 		func() *CgroupStatus {
-			desiredState := c.GetDesiredStatus()
+			desiredState := cgroup.GetDesiredStatus()
 			status := CgroupStatus(desiredState)
 			return &status
 		}(),
 		func() *CgroupStatus {
-			knownState := c.GetKnownStatus()
+			knownState := cgroup.GetKnownStatus()
 			status := CgroupStatus(knownState)
 			return &status
 		}(),
@@ -307,20 +304,20 @@ func (c *CgroupResource) MarshalJSON() ([]byte, error) {
 }
 
 // UnmarshalJSON unmarshals CgroupResource object using duplicate struct CgroupResourceJSON
-func (c *CgroupResource) UnmarshalJSON(b []byte) error {
+func (cgroup *CgroupResource) UnmarshalJSON(b []byte) error {
 	temp := cgroupResourceJSON{}
 
 	if err := json.Unmarshal(b, &temp); err != nil {
 		return err
 	}
 
-	c.cgroupRoot = temp.CgroupRoot
-	c.cgroupMountPath = temp.CgroupMountPath
+	cgroup.cgroupRoot = temp.CgroupRoot
+	cgroup.cgroupMountPath = temp.CgroupMountPath
 	if temp.DesiredStatus != nil {
-		c.SetDesiredStatus(taskresource.ResourceStatus(*temp.DesiredStatus))
+		cgroup.SetDesiredStatus(taskresource.ResourceStatus(*temp.DesiredStatus))
 	}
 	if temp.KnownStatus != nil {
-		c.SetKnownStatus(taskresource.ResourceStatus(*temp.KnownStatus))
+		cgroup.SetKnownStatus(taskresource.ResourceStatus(*temp.KnownStatus))
 	}
 	return nil
 }
