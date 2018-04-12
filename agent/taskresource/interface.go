@@ -25,9 +25,9 @@ type ResourceStatus int32
 const (
 	// ResourceStatusNone is the zero state of a task resource
 	ResourceStatusNone ResourceStatus = iota
-	// ResourceCreated represents a task resource which has been created
+	// ResourceCreated represents state where task resource has been created
 	ResourceCreated
-	// ResourceRemoved represents a task resource which has been cleaned up
+	// ResourceRemoved represents state where task resource has been cleaned up
 	ResourceRemoved
 )
 
@@ -57,10 +57,10 @@ type TaskResource interface {
 	KnownCreated() bool
 	// TerminalStatus returns the last transition state of the resource
 	TerminalStatus() ResourceStatus
-	// GetNextKnownStateProgression returns resource's next state progression
-	GetNextKnownStateProgression() ResourceStatus
+	// NextKnownState returns resource's next state
+	NextKnownState() ResourceStatus
 	// ApplyTransition calls the function required to move to the specified status
-	ApplyTransition(ResourceStatus) (bool, error)
+	ApplyTransition(ResourceStatus) error
 	// SteadyState returns the transition state of the resource defined as "ready"
 	SteadyState() ResourceStatus
 	// SetAppliedStatus sets the applied status of resource and returns whether

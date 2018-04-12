@@ -15,107 +15,71 @@
 package cgroup
 
 import (
-	"sync"
+	"errors"
 	"time"
 
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 )
 
-const (
-	resourceName = "cgroup"
-)
-
 // CgroupResource represents Cgroup resource
-type CgroupResource struct {
-	desiredStatusUnsafe taskresource.ResourceStatus
-	knownStatusUnsafe   taskresource.ResourceStatus
-	appliedStatus       taskresource.ResourceStatus
-	// lock is used for fields that are accessed and updated concurrently
-	lock sync.RWMutex
-}
+type CgroupResource struct{}
 
 // SetDesiredStatus safely sets the desired status of the resource
-func (c *CgroupResource) SetDesiredStatus(status taskresource.ResourceStatus) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	c.desiredStatusUnsafe = status
-}
+func (c *CgroupResource) SetDesiredStatus(status taskresource.ResourceStatus) {}
 
 // GetDesiredStatus safely returns the desired status of the task
 func (c *CgroupResource) GetDesiredStatus() taskresource.ResourceStatus {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.desiredStatusUnsafe
+	return taskresource.ResourceStatusNone
 }
 
 // GetName safely returns the name of the resource
 func (c *CgroupResource) GetName() string {
-	return resourceName
+	return "undefined"
 }
 
 // DesiredTerminal returns true if the cgroup's desired status is REMOVED
 func (c *CgroupResource) DesiredTerminal() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.desiredStatusUnsafe == taskresource.ResourceRemoved
+	return false
 }
 
 // KnownCreated returns true if the cgroup's known status is CREATED
 func (c *CgroupResource) KnownCreated() bool {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.knownStatusUnsafe == taskresource.ResourceCreated
+	return false
 }
 
 // TerminalStatus returns the last transition state of cgroup
 func (c *CgroupResource) TerminalStatus() taskresource.ResourceStatus {
-	return taskresource.ResourceRemoved
+	return taskresource.ResourceStatusNone
 }
 
-// GetNextKnownStateProgression returns the state that the resource should
-// progress to based on its `KnownState`.
-func (c *CgroupResource) GetNextKnownStateProgression() taskresource.ResourceStatus {
-	return c.GetKnownStatus() + 1
+// NextKnownState returns the state that the resource should progress to based
+// on its `KnownState`.
+func (c *CgroupResource) NextKnownState() taskresource.ResourceStatus {
+	return taskresource.ResourceStatusNone
 }
 
 // ApplyTransition calls the function required to move to the specified status
 func (c *CgroupResource) ApplyTransition(nextState taskresource.ResourceStatus) (bool, error) {
-	return true, nil
+	return false, errors.New("unsupported platform")
 }
 
 // SteadyState returns the transition state of the resource defined as "ready"
 func (c *CgroupResource) SteadyState() taskresource.ResourceStatus {
-	return taskresource.ResourceCreated
+	return taskresource.ResourceStatusNone
 }
 
 // SetKnownStatus safely sets the currently known status of the resource
-func (c *CgroupResource) SetKnownStatus(status taskresource.ResourceStatus) {
-	c.lock.Lock()
-	defer c.lock.Unlock()
-
-	c.knownStatusUnsafe = status
-	c.updateAppliedStatusUnsafe(status)
-}
-
-// updateAppliedStatusUnsafe updates the resource transitioning status
-func (c *CgroupResource) updateAppliedStatusUnsafe(knownStatus taskresource.ResourceStatus) {}
+func (c *CgroupResource) SetKnownStatus(status taskresource.ResourceStatus) {}
 
 // SetAppliedStatus sets the applied status of resource and returns whether
 // the resource is already in a transition
 func (c *CgroupResource) SetAppliedStatus(status taskresource.ResourceStatus) bool {
-	return true
+	return false
 }
 
 // GetKnownStatus safely returns the currently known status of the task
 func (c *CgroupResource) GetKnownStatus() taskresource.ResourceStatus {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	return c.knownStatusUnsafe
+	return taskresource.ResourceStatusNone
 }
 
 // SetCreatedAt sets the timestamp for resource's creation time
@@ -126,10 +90,6 @@ func (c *CgroupResource) GetCreatedAt() time.Time {
 	return time.Time{}
 }
 
-func (c *CgroupResource) setupTaskCgroup() error {
-	return nil
-}
-
 // Create creates cgroup root for the task
 func (c *CgroupResource) Create() error {
 	return nil
@@ -137,23 +97,20 @@ func (c *CgroupResource) Create() error {
 
 // Cleanup removes the cgroup root created for the task
 func (c *CgroupResource) Cleanup() error {
-	return nil
+	return errors.New("unsupported platform")
 }
 
 // StatusString returns the string of the cgroup resource status
 func (c *CgroupResource) StatusString(status taskresource.ResourceStatus) string {
-	return CgroupStatus(status).String()
+	return "undefined"
 }
 
-// cgroupResourceJSON duplicates CgroupResource fields, only for marshalling and unmarshalling purposes
-type cgroupResourceJSON struct{}
-
-// MarshalJSON marshals CgroupResource object using duplicate struct CgroupResourceJSON
+// MarshalJSON marshals CgroupResource object
 func (c *CgroupResource) MarshalJSON() ([]byte, error) {
-	return nil, nil
+	return nil, errors.New("unsupported platform")
 }
 
-// UnmarshalJSON unmarshals CgroupResource object using duplicate struct CgroupResourceJSON
+// UnmarshalJSON unmarshals CgroupResource object
 func (c *CgroupResource) UnmarshalJSON(b []byte) error {
-	return nil
+	return errors.New("unsupported platform")
 }

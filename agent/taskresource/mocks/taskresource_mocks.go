@@ -49,11 +49,10 @@ func (m *MockTaskResource) EXPECT() *MockTaskResourceMockRecorder {
 }
 
 // ApplyTransition mocks base method
-func (m *MockTaskResource) ApplyTransition(arg0 taskresource.ResourceStatus) (bool, error) {
+func (m *MockTaskResource) ApplyTransition(arg0 taskresource.ResourceStatus) error {
 	ret := m.ctrl.Call(m, "ApplyTransition", arg0)
-	ret0, _ := ret[0].(bool)
-	ret1, _ := ret[1].(error)
-	return ret0, ret1
+	ret0, _ := ret[0].(error)
+	return ret0
 }
 
 // ApplyTransition indicates an expected call of ApplyTransition
@@ -145,18 +144,6 @@ func (mr *MockTaskResourceMockRecorder) GetName() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetName", reflect.TypeOf((*MockTaskResource)(nil).GetName))
 }
 
-// GetNextKnownStateProgression mocks base method
-func (m *MockTaskResource) GetNextKnownStateProgression() taskresource.ResourceStatus {
-	ret := m.ctrl.Call(m, "GetNextKnownStateProgression")
-	ret0, _ := ret[0].(taskresource.ResourceStatus)
-	return ret0
-}
-
-// GetNextKnownStateProgression indicates an expected call of GetNextKnownStateProgression
-func (mr *MockTaskResourceMockRecorder) GetNextKnownStateProgression() *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNextKnownStateProgression", reflect.TypeOf((*MockTaskResource)(nil).GetNextKnownStateProgression))
-}
-
 // KnownCreated mocks base method
 func (m *MockTaskResource) KnownCreated() bool {
 	ret := m.ctrl.Call(m, "KnownCreated")
@@ -180,6 +167,18 @@ func (m *MockTaskResource) MarshalJSON() ([]byte, error) {
 // MarshalJSON indicates an expected call of MarshalJSON
 func (mr *MockTaskResourceMockRecorder) MarshalJSON() *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "MarshalJSON", reflect.TypeOf((*MockTaskResource)(nil).MarshalJSON))
+}
+
+// NextKnownState mocks base method
+func (m *MockTaskResource) NextKnownState() taskresource.ResourceStatus {
+	ret := m.ctrl.Call(m, "NextKnownState")
+	ret0, _ := ret[0].(taskresource.ResourceStatus)
+	return ret0
+}
+
+// NextKnownState indicates an expected call of NextKnownState
+func (mr *MockTaskResourceMockRecorder) NextKnownState() *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NextKnownState", reflect.TypeOf((*MockTaskResource)(nil).NextKnownState))
 }
 
 // SetAppliedStatus mocks base method

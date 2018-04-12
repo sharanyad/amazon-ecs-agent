@@ -266,6 +266,14 @@ func (engine *DockerTaskEngine) Disable() {
 	engine.processTasks.Lock()
 }
 
+// IsTaskManaged checks if task for the corresponding arn is present
+func (engine *DockerTaskEngine) IsTaskManaged(arn string) bool {
+	engine.processTasks.RLock()
+	defer engine.processTasks.RUnlock()
+	_, ok := engine.managedTasks[arn]
+	return ok
+}
+
 // synchronizeState explicitly goes through each docker container stored in
 // "state" and updates its KnownStatus appropriately, as well as queueing up
 // events to push upstream.
@@ -467,6 +475,8 @@ func (engine *DockerTaskEngine) deleteTask(task *api.Task) {
 			seelog.Warnf("Task engine [%s]: unable to cleanup resource %s: %v",
 				task.Arn, resource.GetName(), err)
 		}
+		seelog.Debugf("Task engine [%s]: resource %s cleanup complete", task.Arn,
+			resource.GetName())
 	}
 
 	// Now remove ourselves from the global state and cleanup channels

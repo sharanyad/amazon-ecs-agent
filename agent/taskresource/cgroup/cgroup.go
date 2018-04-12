@@ -53,8 +53,8 @@ type CgroupResource struct {
 	createdAt                          time.Time
 	desiredStatusUnsafe                taskresource.ResourceStatus
 	knownStatusUnsafe                  taskresource.ResourceStatus
-	resourceStatusToTransitionFunction map[taskresource.ResourceStatus]func() error
 	appliedStatus                      taskresource.ResourceStatus
+	resourceStatusToTransitionFunction map[taskresource.ResourceStatus]func() error
 	// lock is used for fields that are accessed and updated concurrently
 	lock sync.RWMutex
 }
@@ -129,21 +129,22 @@ func (cgroup *CgroupResource) TerminalStatus() taskresource.ResourceStatus {
 	return taskresource.ResourceStatus(CgroupRemoved)
 }
 
-// GetNextKnownStateProgression returns the state that the resource should
+// NextKnownState returns the state that the resource should
 // progress to based on its `KnownState`.
-func (cgroup *CgroupResource) GetNextKnownStateProgression() taskresource.ResourceStatus {
+func (cgroup *CgroupResource) NextKnownState() taskresource.ResourceStatus {
 	return cgroup.GetKnownStatus() + 1
 }
 
 // ApplyTransition calls the function required to move to the specified status
-func (cgroup *CgroupResource) ApplyTransition(nextState taskresource.ResourceStatus) (bool, error) {
+func (cgroup *CgroupResource) ApplyTransition(nextState taskresource.ResourceStatus) error {
 	transitionFunc, ok := cgroup.resourceStatusToTransitionFunction[nextState]
 	if !ok {
-		seelog.Criticalf("Cgroup Resource [%s]: unsupported desired state transition [%s]: %s",
-			cgroup.taskARN, cgroup.GetName(), CgroupStatus(nextState).String())
-		return false, nil
+		seelog.Errorf("Cgroup Resource [%s]: unsupported desired state transition [%s]: %s",
+			cgroup.taskARN, cgroup.GetName(), cgroup.StatusString(nextState))
+		return errors.Errorf("resource [%s]: transition to %s impossible", cgroup.GetName(),
+			cgroup.StatusString(nextState))
 	}
-	return true, transitionFunc()
+	return transitionFunc()
 }
 
 // SteadyState returns the transition state of the resource defined as "ready"
