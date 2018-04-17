@@ -44,15 +44,19 @@ var (
 
 // CgroupResource represents Cgroup resource
 type CgroupResource struct {
-	taskARN                            string
-	control                            cgroupres.Control
-	cgroupRoot                         string
-	cgroupMountPath                    string
-	resourceSpec                       specs.LinuxResources
-	ioutil                             ioutilwrapper.IOUtil
-	createdAt                          time.Time
-	desiredStatusUnsafe                taskresource.ResourceStatus
-	knownStatusUnsafe                  taskresource.ResourceStatus
+	taskARN				   string
+	control				   cgroupres.Control
+	cgroupRoot			   string
+	cgroupMountPath			   string
+	resourceSpec			   specs.LinuxResources
+	ioutil				   ioutilwrapper.IOUtil
+	createdAt			   time.Time
+	desiredStatusUnsafe		   taskresource.ResourceStatus
+	knownStatusUnsafe		   taskresource.ResourceStatus
+	// appliedStatus is the status that has been "applied" (e.g., we've called some
+	// operation such as 'Create' on the resource) but we don't yet know that the
+	// application was successful, which may then change the known status. This is
+	// used while progressing resource states in progressTask() of task manager
 	appliedStatus                      taskresource.ResourceStatus
 	resourceStatusToTransitionFunction map[taskresource.ResourceStatus]func() error
 	// lock is used for fields that are accessed and updated concurrently
@@ -82,6 +86,10 @@ func (cgroup *CgroupResource) initializeResourceStatusToTransitionFunction() {
 		taskresource.ResourceStatus(CgroupCreated): cgroup.Create,
 	}
 	cgroup.resourceStatusToTransitionFunction = resourceStatusToTransitionFunction
+}
+
+func (cgroup *CgroupResource) SetIOUtil(ioutil ioutilwrapper.IOUtil) {
+	cgroup.ioutil = ioutil
 }
 
 // SetDesiredStatus safely sets the desired status of the resource

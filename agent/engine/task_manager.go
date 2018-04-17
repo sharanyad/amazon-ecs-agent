@@ -879,7 +879,7 @@ func (mtask *managedTask) transitionResource(resource taskresource.TaskResource,
 	engine := mtask.engine
 	err := mtask.applyResourceState(resource, to)
 
-	if engine.IsTaskManaged(mtask.Arn) {
+	if engine.isTaskManaged(mtask.Arn) {
 		mtask.emitResourceChange(resourceStateChange{
 			resource:  resource,
 			nextState: to,
@@ -1083,11 +1083,13 @@ func (mtask *managedTask) discardEvents() {
 		select {
 		case <-mtask.dockerMessages:
 		case <-mtask.acsMessages:
+		case <-mtask.resourceStateChangeEvent:
 		case <-mtask.ctx.Done():
 			// The task has been cancelled. No need to process any more
 			// events
 			close(mtask.dockerMessages)
 			close(mtask.acsMessages)
+			close(mtask.resourceStateChangeEvent)
 			return
 		}
 	}

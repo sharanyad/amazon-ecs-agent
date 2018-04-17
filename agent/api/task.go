@@ -869,8 +869,8 @@ func (task *Task) UpdateDesiredStatus() {
 	task.lock.Lock()
 	defer task.lock.Unlock()
 	task.updateTaskDesiredStatusUnsafe()
-	task.updateContainerDesiredStatusUnsafe()
-	task.updateResourceDesiredStatusUnsafe()
+	task.updateContainerDesiredStatusUnsafe(task.DesiredStatusUnsafe)
+	task.updateResourceDesiredStatusUnsafe(task.DesiredStatusUnsafe)
 }
 
 // updateTaskDesiredStatusUnsafe determines what status the task should properly be at based on the containers' statuses
@@ -893,9 +893,8 @@ func (task *Task) updateTaskDesiredStatusUnsafe() {
 // task's desired status
 // Invariant: container desired status is <= task desired status converted to container status
 // Note: task desired status and container desired status is typically only RUNNING or STOPPED
-func (task *Task) updateContainerDesiredStatusUnsafe() {
+func (task *Task) updateContainerDesiredStatusUnsafe(taskDesiredStatus TaskStatus) {
 	for _, c := range task.Containers {
-		taskDesiredStatus := task.DesiredStatusUnsafe
 		taskDesiredStatusToContainerStatus := taskDesiredStatus.ContainerStatus(c.GetSteadyStateStatus())
 		if c.GetDesiredStatus() < taskDesiredStatusToContainerStatus {
 			c.SetDesiredStatus(taskDesiredStatusToContainerStatus)
@@ -906,8 +905,7 @@ func (task *Task) updateContainerDesiredStatusUnsafe() {
 // updateResourceDesiredStatusUnsafe sets all resources' desired status depending on the
 // task's desired status
 // TODO: Create a mapping of resource status to the corresponding task status and use it here
-func (task *Task) updateResourceDesiredStatusUnsafe() {
-	taskDesiredStatus := task.DesiredStatusUnsafe
+func (task *Task) updateResourceDesiredStatusUnsafe(taskDesiredStatus TaskStatus) {
 	for _, r := range task.Resources {
 		if taskDesiredStatus == TaskRunning {
 			if r.GetDesiredStatus() < r.SteadyState() {

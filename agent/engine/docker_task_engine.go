@@ -266,8 +266,8 @@ func (engine *DockerTaskEngine) Disable() {
 	engine.processTasks.Lock()
 }
 
-// IsTaskManaged checks if task for the corresponding arn is present
-func (engine *DockerTaskEngine) IsTaskManaged(arn string) bool {
+// isTaskManaged checks if task for the corresponding arn is present
+func (engine *DockerTaskEngine) isTaskManaged(arn string) bool {
 	engine.processTasks.RLock()
 	defer engine.processTasks.RUnlock()
 	_, ok := engine.managedTasks[arn]
@@ -1133,7 +1133,7 @@ func (engine *DockerTaskEngine) transitionFunctionMap() map[api.ContainerStatus]
 	return engine.containerStatusToTransitionFunction
 }
 
-type transitionApplyFunc (func(*api.Task, *api.Container) DockerContainerMetadata)
+type transitionApplyFunc (func(*api.Task, *api.Container) dockerapi.DockerContainerMetadata)
 
 // State is a function primarily meant for testing usage; it is explicitly not
 // part of the TaskEngine interface and should not be relied upon.

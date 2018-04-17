@@ -980,15 +980,16 @@ func TestCleanupTask(t *testing.T) {
 		imageManager: mockImageManager,
 	}
 	mTask := &managedTask{
-		ctx:            ctx,
-		cancel:         cancel,
-		Task:           testdata.LoadTask("sleep5"),
-		_time:          mockTime,
-		engine:         taskEngine,
-		acsMessages:    make(chan acsTransition),
-		dockerMessages: make(chan dockerContainerChange),
-		cfg:            taskEngine.cfg,
-		saver:          taskEngine.saver,
+		ctx:                      ctx,
+		cancel:                   cancel,
+		Task:                     testdata.LoadTask("sleep5"),
+		_time:                    mockTime,
+		engine:                   taskEngine,
+		acsMessages:              make(chan acsTransition),
+		dockerMessages:           make(chan dockerContainerChange),
+		resourceStateChangeEvent: make(chan resourceStateChange),
+		cfg:			  taskEngine.cfg,
+		saver:			  taskEngine.saver,
 	}
 	mTask.Task.Resources = []taskresource.TaskResource{mockResource}
 	mTask.SetKnownStatus(api.TaskStopped)
@@ -1039,15 +1040,16 @@ func TestCleanupTaskWaitsForStoppedSent(t *testing.T) {
 		imageManager: mockImageManager,
 	}
 	mTask := &managedTask{
-		ctx:            ctx,
-		cancel:         cancel,
-		Task:           testdata.LoadTask("sleep5"),
-		_time:          mockTime,
-		engine:         taskEngine,
-		acsMessages:    make(chan acsTransition),
-		dockerMessages: make(chan dockerContainerChange),
-		cfg:            taskEngine.cfg,
-		saver:          taskEngine.saver,
+		ctx:                      ctx,
+		cancel:                   cancel,
+		Task:                     testdata.LoadTask("sleep5"),
+		_time:                    mockTime,
+		engine:                   taskEngine,
+		acsMessages:              make(chan acsTransition),
+		dockerMessages:           make(chan dockerContainerChange),
+		resourceStateChangeEvent: make(chan resourceStateChange),
+		cfg:			  taskEngine.cfg,
+		saver:			  taskEngine.saver,
 	}
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskRunning)
@@ -1162,15 +1164,16 @@ func TestCleanupTaskENIs(t *testing.T) {
 		imageManager: mockImageManager,
 	}
 	mTask := &managedTask{
-		ctx:            ctx,
-		cancel:         cancel,
-		Task:           testdata.LoadTask("sleep5"),
-		_time:          mockTime,
-		engine:         taskEngine,
-		acsMessages:    make(chan acsTransition),
-		dockerMessages: make(chan dockerContainerChange),
-		cfg:            taskEngine.cfg,
-		saver:          taskEngine.saver,
+		ctx:                      ctx,
+		cancel:                   cancel,
+		Task:                     testdata.LoadTask("sleep5"),
+		_time:                    mockTime,
+		engine:                   taskEngine,
+		acsMessages:              make(chan acsTransition),
+		dockerMessages:           make(chan dockerContainerChange),
+		resourceStateChangeEvent: make(chan resourceStateChange),
+		cfg:			  taskEngine.cfg,
+		saver:			  taskEngine.saver,
 	}
 	mTask.SetTaskENI(&api.ENI{
 		ID: "TestCleanupTaskENIs",
@@ -1291,15 +1294,16 @@ func TestCleanupTaskWithInvalidInterval(t *testing.T) {
 		imageManager: mockImageManager,
 	}
 	mTask := &managedTask{
-		ctx:            ctx,
-		cancel:         cancel,
-		Task:           testdata.LoadTask("sleep5"),
-		_time:          mockTime,
-		engine:         taskEngine,
-		acsMessages:    make(chan acsTransition),
-		dockerMessages: make(chan dockerContainerChange),
-		cfg:            taskEngine.cfg,
-		saver:          taskEngine.saver,
+		ctx:                      ctx,
+		cancel:                   cancel,
+		Task:                     testdata.LoadTask("sleep5"),
+		_time:                    mockTime,
+		engine:                   taskEngine,
+		acsMessages:              make(chan acsTransition),
+		dockerMessages:           make(chan dockerContainerChange),
+		resourceStateChangeEvent: make(chan resourceStateChange),
+		cfg:			  taskEngine.cfg,
+		saver:			  taskEngine.saver,
 	}
 
 	mTask.SetKnownStatus(api.TaskStopped)
@@ -1350,16 +1354,17 @@ func TestCleanupTaskWithResourceHappyPath(t *testing.T) {
 		resource:     mockResource,
 	}
 	mTask := &managedTask{
-		ctx:            ctx,
-		cancel:         cancel,
-		Task:           testdata.LoadTask("sleep5TaskCgroup"),
-		_time:          mockTime,
-		engine:         taskEngine,
-		acsMessages:    make(chan acsTransition),
-		dockerMessages: make(chan dockerContainerChange),
-		resource:       mockResource,
-		cfg:            taskEngine.cfg,
-		saver:          taskEngine.saver,
+		ctx:                      ctx,
+		cancel:                   cancel,
+		Task:                     testdata.LoadTask("sleep5TaskCgroup"),
+		_time:                    mockTime,
+		engine:                   taskEngine,
+		acsMessages:              make(chan acsTransition),
+		dockerMessages:           make(chan dockerContainerChange),
+		resourceStateChangeEvent: make(chan resourceStateChange),
+		resource:                 mockResource,
+		cfg:                      taskEngine.cfg,
+		saver:                    taskEngine.saver,
 	}
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskStopped)
@@ -1410,16 +1415,17 @@ func TestCleanupTaskWithResourceErrorPath(t *testing.T) {
 		resource:     mockResource,
 	}
 	mTask := &managedTask{
-		ctx:            ctx,
-		cancel:         cancel,
-		Task:           testdata.LoadTask("sleep5TaskCgroup"),
-		_time:          mockTime,
-		engine:         taskEngine,
-		acsMessages:    make(chan acsTransition),
-		dockerMessages: make(chan dockerContainerChange),
-		cfg:            taskEngine.cfg,
-		resource:       mockResource,
-		saver:          taskEngine.saver,
+		ctx:                      ctx,
+		cancel:                   cancel,
+		Task:                     testdata.LoadTask("sleep5TaskCgroup"),
+		_time:                    mockTime,
+		engine:                   taskEngine,
+		acsMessages:              make(chan acsTransition),
+		dockerMessages:           make(chan dockerContainerChange),
+		resourceStateChangeEvent: make(chan resourceStateChange),
+		cfg:			  taskEngine.cfg,
+		resource:		  mockResource,
+		saver:			  taskEngine.saver,
 	}
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskStopped)
