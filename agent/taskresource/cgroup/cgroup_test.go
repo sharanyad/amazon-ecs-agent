@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/aws/amazon-ecs-agent/agent/engine/testdata"
 	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
 	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup/factory/mock"
 	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup/mock_control"
@@ -38,6 +37,7 @@ const (
 	invalidTaskArn  = "invalid:task::arn"
 	cgroupMountPath = "/sys/fs/cgroup"
 	taskName        = "sleep5TaskCgroup"
+	taskID          = "taskID"
 )
 
 func TestCreateHappyPath(t *testing.T) {
@@ -47,9 +47,6 @@ func TestCreateHappyPath(t *testing.T) {
 	mockControl := mock_cgroup.NewMockControl(ctrl)
 	mockIO := mock_ioutilwrapper.NewMockIOUtil(ctrl)
 
-	task := testdata.LoadTask(taskName)
-	taskID, err := task.GetID()
-	assert.NoError(t, err)
 	cgroupMemoryPath := fmt.Sprintf("/sys/fs/cgroup/memory/ecs/%s/memory.use_hierarchy", taskID)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 
@@ -58,7 +55,7 @@ func TestCreateHappyPath(t *testing.T) {
 		mockControl.EXPECT().Create(gomock.Any()).Return(nil, nil),
 		mockIO.EXPECT().WriteFile(cgroupMemoryPath, gomock.Any(), gomock.Any()).Return(nil),
 	)
-	cgroupResource := NewCgroupResource(task.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
+	cgroupResource := NewCgroupResource("taskArn", mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 	cgroupResource.ioutil = mockIO
 	assert.NoError(t, cgroupResource.Create())
 }
@@ -70,16 +67,13 @@ func TestCreateCgroupPathExists(t *testing.T) {
 	mockControl := mock_cgroup.NewMockControl(ctrl)
 	mockIO := mock_ioutilwrapper.NewMockIOUtil(ctrl)
 
-	task := testdata.LoadTask(taskName)
-	taskID, err := task.GetID()
-	assert.NoError(t, err)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 
 	gomock.InOrder(
 		mockControl.EXPECT().Exists(gomock.Any()).Return(true),
 	)
 
-	cgroupResource := NewCgroupResource(task.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
+	cgroupResource := NewCgroupResource("taskArn", mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 	cgroupResource.ioutil = mockIO
 	assert.NoError(t, cgroupResource.Create())
 }
@@ -92,9 +86,6 @@ func TestCreateCgroupError(t *testing.T) {
 	mockIO := mock_ioutilwrapper.NewMockIOUtil(ctrl)
 	mockCgroup := mock_cgroups.NewMockCgroup(ctrl)
 
-	task := testdata.LoadTask(taskName)
-	taskID, err := task.GetID()
-	assert.NoError(t, err)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 
 	gomock.InOrder(
@@ -102,7 +93,7 @@ func TestCreateCgroupError(t *testing.T) {
 		mockControl.EXPECT().Create(gomock.Any()).Return(mockCgroup, errors.New("cgroup create error")),
 	)
 
-	cgroupResource := NewCgroupResource(task.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
+	cgroupResource := NewCgroupResource("taskArn", mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 	cgroupResource.ioutil = mockIO
 	assert.Error(t, cgroupResource.Create())
 }
@@ -112,14 +103,11 @@ func TestCleanupHappyPath(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockControl := mock_cgroup.NewMockControl(ctrl)
-	task := testdata.LoadTask(taskName)
-	taskID, err := task.GetID()
-	assert.NoError(t, err)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 
 	mockControl.EXPECT().Remove(cgroupRoot).Return(nil)
 
-	cgroupResource := NewCgroupResource(task.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
+	cgroupResource := NewCgroupResource("taskArn", mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 	assert.NoError(t, cgroupResource.Cleanup())
 }
 
@@ -128,14 +116,11 @@ func TestCleanupRemoveError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockControl := mock_cgroup.NewMockControl(ctrl)
-	task := testdata.LoadTask(taskName)
-	taskID, err := task.GetID()
-	assert.NoError(t, err)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 
 	mockControl.EXPECT().Remove(gomock.Any()).Return(errors.New("cgroup remove error"))
 
-	cgroupResource := NewCgroupResource(task.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
+	cgroupResource := NewCgroupResource("taskArn", mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 	assert.Error(t, cgroupResource.Cleanup())
 }
 
@@ -144,14 +129,11 @@ func TestCleanupCgroupDeletedError(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockControl := mock_cgroup.NewMockControl(ctrl)
-	task := testdata.LoadTask(taskName)
-	taskID, err := task.GetID()
-	assert.NoError(t, err)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 
 	mockControl.EXPECT().Remove(gomock.Any()).Return(cgroups.ErrCgroupDeleted)
 
-	cgroupResource := NewCgroupResource(task.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
+	cgroupResource := NewCgroupResource("taskArn", mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 	assert.NoError(t, cgroupResource.Cleanup())
 }
 

@@ -32,9 +32,9 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/engine/dependencygraph"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	"github.com/aws/amazon-ecs-agent/agent/eventstream"
-	"github.com/aws/amazon-ecs-agent/agent/resources"
 	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	utilsync "github.com/aws/amazon-ecs-agent/agent/utils/sync"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
@@ -112,7 +112,6 @@ type DockerTaskEngine struct {
 	imageManager                        ImageManager
 	containerStatusToTransitionFunction map[api.ContainerStatus]transitionApplyFunc
 	metadataManager                     containermetadata.Manager
-	resource                            resources.Resource
 
 	// taskSteadyStatePollInterval is the duration that a managed task waits
 	// once the task gets into steady state before polling the state of all of
@@ -121,6 +120,8 @@ type DockerTaskEngine struct {
 	// This can be used by tests that are looking to ensure that the steady state
 	// verification logic gets executed to set it to a low interval
 	taskSteadyStatePollInterval time.Duration
+
+	resourceFields taskresource.ResourceFields
 }
 
 // NewDockerTaskEngine returns a created, but uninitialized, DockerTaskEngine.
@@ -134,7 +135,7 @@ func NewDockerTaskEngine(cfg *config.Config,
 	imageManager ImageManager,
 	state dockerstate.TaskEngineState,
 	metadataManager containermetadata.Manager,
-	resource resources.Resource) *DockerTaskEngine {
+	resourceFields taskresource.ResourceFields) *DockerTaskEngine {
 	dockerTaskEngine := &DockerTaskEngine{
 		cfg:    cfg,
 		client: client,
@@ -157,8 +158,8 @@ func NewDockerTaskEngine(cfg *config.Config,
 		}),
 
 		metadataManager:             metadataManager,
-		resource:                    resource,
 		taskSteadyStatePollInterval: defaultTaskSteadyStatePollInterval,
+		resourceFields:              resourceFields,
 	}
 
 	dockerTaskEngine.initializeContainerStatusToTransitionFunction()
@@ -461,14 +462,6 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 }
 
 func (engine *DockerTaskEngine) deleteTask(task *api.Task) {
-	if engine.cfg.TaskCPUMemLimit.Enabled() {
-		err := engine.resource.Cleanup(task)
-		if err != nil {
-			seelog.Warnf("Task engine [%s]: unable to cleanup platform resources: %v",
-				task.Arn, err)
-		}
-	}
-
 	for _, resource := range task.Resources {
 		err := resource.Cleanup()
 		if err != nil {
@@ -611,7 +604,14 @@ func (engine *DockerTaskEngine) StateChangeEvents() chan statechange.Event {
 
 // AddTask starts tracking a task
 func (engine *DockerTaskEngine) AddTask(task *api.Task) error {
-	task.PostUnmarshalTask(engine.cfg, engine.credentialsManager)
+	err := task.PostUnmarshalTask(engine.cfg, engine.credentialsManager, engine.resourceFields)
+	if err != nil {
+		seelog.Errorf("Task engine [%s]: unable to progress task: %v", task.Arn, err)
+		task.SetKnownStatus(api.TaskStopped)
+		task.SetDesiredStatus(api.TaskStopped)
+		engine.emitTaskEvent(task, err.Error())
+		return nil
+	}
 
 	engine.processTasks.Lock()
 	defer engine.processTasks.Unlock()
