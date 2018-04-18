@@ -95,3 +95,18 @@ func (err *DockerClientConfigError) Error() string { return err.Msg }
 
 // ErrorName returns the name of the error
 func (err *DockerClientConfigError) ErrorName() string { return "DockerClientConfigError" }
+
+// ResourceInitializeError is a task error for which a required resource cannot
+// be initialized
+type ResourceInitializeError struct {
+	TaskArn string
+}
+
+func (err ResourceInitializeError) Error() string {
+	return "Resource cannot be initialized, taskArn: " + err.TaskArn
+}
+
+// ErrorName is the name of the error
+func (err ResourceInitializeError) ErrorName() string {
+	return "ResourceInitializeError"
+}
