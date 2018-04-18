@@ -217,17 +217,6 @@ func (mtask *managedTask) overseeTask() {
 			seelog.Debugf("Managed task [%s]: task not steady state or terminal; progressing it",
 				mtask.Arn)
 
-			// TODO: Add new resource provisioned state ?
-			if mtask.cfg.TaskCPUMemLimit.Enabled() {
-				err := mtask.resource.Setup(mtask.Task)
-				if err != nil {
-					seelog.Criticalf("Managed task [%s]: unable to setup platform resources: %v",
-						mtask.Arn, err)
-					mtask.SetDesiredStatus(api.TaskStopped)
-					mtask.emitTaskEvent(mtask.Task, taskUnableToCreatePlatformResources)
-				}
-				seelog.Infof("Managed task [%s]: Cgroup resource set up for task complete", mtask.Arn)
-			}
 			mtask.progressTask()
 		}
 

@@ -231,17 +231,8 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 
 	// Conditionally create '/ecs' cgroup root
 	if agent.cfg.TaskCPUMemLimit.Enabled() {
-		agent.resource.ApplyConfigDependencies(agent.cfg)
-		err = agent.resource.Init()
-		// When task CPU and memory limits are enabled, all tasks are placed
-		// under the '/ecs' cgroup root.
-		if err != nil {
-			if agent.cfg.TaskCPUMemLimit == config.ExplicitlyEnabled {
-				seelog.Criticalf("Unable to setup '/ecs' cgroup: %v", err)
-				return exitcodes.ExitTerminal
-			}
-			seelog.Warnf("Disabling TaskCPUMemLimit because agent is unabled to setup '/ecs' cgroup: %v", err)
-			agent.cfg.TaskCPUMemLimit = config.ExplicitlyDisabled
+		if err := agent.cgroupInit(); err != nil {
+			return exitcodes.ExitTerminal
 		}
 	}
 

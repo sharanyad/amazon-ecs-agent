@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/aws/amazon-ecs-agent/agent/config"
 	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/ecscni"
 	"github.com/aws/amazon-ecs-agent/agent/engine"
@@ -26,6 +27,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/eni/pause"
 	"github.com/aws/amazon-ecs-agent/agent/eni/udevwrapper"
 	"github.com/aws/amazon-ecs-agent/agent/eni/watcher"
+	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
 	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/cihub/seelog"
 	"github.com/pkg/errors"
@@ -182,4 +184,20 @@ func contains(capabilities []string, capability string) bool {
 	}
 
 	return false
+}
+
+func (agent *ecsAgent) cgroupInit() error {
+	cgroupControl := cgroup.New()
+	err := cgroupControl.Init()
+	// When task CPU and memory limits are enabled, all tasks are placed
+	// under the '/ecs' cgroup root.
+	if err != nil {
+		if agent.cfg.TaskCPUMemLimit == config.ExplicitlyEnabled {
+			seelog.Criticalf("Unable to setup '/ecs' cgroup: %v", err)
+			return errors.New("Unable to setup '/ecs' cgroup")
+		}
+		seelog.Warnf("Disabling TaskCPUMemLimit because agent is unabled to setup '/ecs' cgroup: %v", err)
+		agent.cfg.TaskCPUMemLimit = config.ExplicitlyDisabled
+	}
+	return nil
 }

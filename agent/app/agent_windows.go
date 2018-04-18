@@ -246,3 +246,7 @@ func (t *termHandlerIndicator) wait() uint32 {
 	defer t.mu.Unlock()
 	return t.exitCode
 }
+
+func (agent *ecsAgent) cgroupInit() error {
+	return errors.New("unsupported platform")
+}

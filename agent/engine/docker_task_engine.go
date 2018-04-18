@@ -461,14 +461,6 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 }
 
 func (engine *DockerTaskEngine) deleteTask(task *api.Task) {
-	if engine.cfg.TaskCPUMemLimit.Enabled() {
-		err := engine.resource.Cleanup(task)
-		if err != nil {
-			seelog.Warnf("Task engine [%s]: unable to cleanup platform resources: %v",
-				task.Arn, err)
-		}
-	}
-
 	for _, resource := range task.Resources {
 		err := resource.Cleanup()
 		if err != nil {
@@ -611,7 +603,14 @@ func (engine *DockerTaskEngine) StateChangeEvents() chan statechange.Event {
 
 // AddTask starts tracking a task
 func (engine *DockerTaskEngine) AddTask(task *api.Task) error {
-	task.PostUnmarshalTask(engine.cfg, engine.credentialsManager)
+	err := task.PostUnmarshalTask(engine.cfg, engine.credentialsManager)
+	if err != nil {
+		seelog.Errorf("Task engine [%s]: unable to progress task: %v", task.Arn, err)
+		task.SetKnownStatus(api.TaskStopped)
+		task.SetDesiredStatus(api.TaskStopped)
+		engine.emitTaskEvent(task, err.Error())
+		return nil
+	}
 
 	engine.processTasks.Lock()
 	defer engine.processTasks.Unlock()
