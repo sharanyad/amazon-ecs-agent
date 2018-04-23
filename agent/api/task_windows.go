@@ -16,6 +16,7 @@
 package api
 
 import (
+	"errors"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -113,4 +114,8 @@ func (task *Task) dockerCPUShares(containerCPU uint) int64 {
 		return 2
 	}
 	return int64(containerCPU)
+}
+
+func (task *Task) initializeCgroupResource(cgroupPath string) error {
+	return errors.New("unsupported platform")
 }
