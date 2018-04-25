@@ -37,7 +37,6 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/engine/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/engine/testdata"
 	"github.com/aws/amazon-ecs-agent/agent/eventstream"
-	"github.com/aws/amazon-ecs-agent/agent/resources/mock_resources"
 	"github.com/aws/amazon-ecs-agent/agent/statechange"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager/mocks"
@@ -1337,7 +1336,6 @@ func TestCleanupTaskWithResourceHappyPath(t *testing.T) {
 	mockState := mock_dockerstate.NewMockTaskEngineState(ctrl)
 	mockClient := mock_dockerapi.NewMockDockerClient(ctrl)
 	mockImageManager := mock_engine.NewMockImageManager(ctrl)
-	mockResource := mock_resources.NewMockResource(ctrl)
 	defer ctrl.Finish()
 
 	cfg := getTestConfig()
@@ -1351,69 +1349,8 @@ func TestCleanupTaskWithResourceHappyPath(t *testing.T) {
 		state:        mockState,
 		client:       mockClient,
 		imageManager: mockImageManager,
-		resource:     mockResource,
 	}
-	mTask := &managedTask{
-		ctx:                      ctx,
-		cancel:                   cancel,
-		Task:                     testdata.LoadTask("sleep5TaskCgroup"),
-		_time:                    mockTime,
-		engine:                   taskEngine,
-		acsMessages:              make(chan acsTransition),
-		dockerMessages:           make(chan dockerContainerChange),
-		resourceStateChangeEvent: make(chan resourceStateChange),
-		resource:                 mockResource,
-		cfg:                      taskEngine.cfg,
-		saver:                    taskEngine.saver,
-	}
-	mTask.SetKnownStatus(api.TaskStopped)
-	mTask.SetSentStatus(api.TaskStopped)
-	container := mTask.Containers[0]
-	dockerContainer := &api.DockerContainer{
-		DockerName: "dockerContainer",
-	}
-
-	// Expectations for triggering cleanup
-	now := mTask.GetKnownStatusTime()
-	taskStoppedDuration := 1 * time.Minute
-	mockTime.EXPECT().Now().Return(now).AnyTimes()
-	cleanupTimeTrigger := make(chan time.Time)
-	mockTime.EXPECT().After(gomock.Any()).Return(cleanupTimeTrigger)
-	go func() {
-		cleanupTimeTrigger <- now
-	}()
-
-	// Expectations to verify that the task gets removed
-	mockState.EXPECT().ContainerMapByArn(mTask.Arn).Return(map[string]*api.DockerContainer{container.Name: dockerContainer}, true)
-	mockClient.EXPECT().RemoveContainer(gomock.Any(), dockerContainer.DockerName, gomock.Any()).Return(nil)
-	mockImageManager.EXPECT().RemoveContainerReferenceFromImageState(container).Return(nil)
-	mockState.EXPECT().RemoveTask(mTask.Task)
-	mockResource.EXPECT().Cleanup(gomock.Any()).Return(nil)
-	mTask.cleanupTask(taskStoppedDuration)
-}
-
-func TestCleanupTaskWithResourceErrorPath(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	mockTime := mock_ttime.NewMockTime(ctrl)
-	mockState := mock_dockerstate.NewMockTaskEngineState(ctrl)
-	mockClient := mock_dockerapi.NewMockDockerClient(ctrl)
-	mockImageManager := mock_engine.NewMockImageManager(ctrl)
-	mockResource := mock_resources.NewMockResource(ctrl)
-	defer ctrl.Finish()
-
-	cfg := getTestConfig()
-	cfg.TaskCPUMemLimit = config.ExplicitlyEnabled
-	ctx, cancel := context.WithCancel(context.TODO())
-	defer cancel()
-	taskEngine := &DockerTaskEngine{
-		ctx:          ctx,
-		cfg:          &cfg,
-		saver:        statemanager.NewNoopStateManager(),
-		state:        mockState,
-		client:       mockClient,
-		imageManager: mockImageManager,
-		resource:     mockResource,
-	}
+	mockResource := mock_taskresource.NewMockTaskResource(ctrl)
 	mTask := &managedTask{
 		ctx:                      ctx,
 		cancel:                   cancel,
@@ -1424,9 +1361,9 @@ func TestCleanupTaskWithResourceErrorPath(t *testing.T) {
 		dockerMessages:           make(chan dockerContainerChange),
 		resourceStateChangeEvent: make(chan resourceStateChange),
 		cfg:			  taskEngine.cfg,
-		resource:		  mockResource,
 		saver:			  taskEngine.saver,
 	}
+	mTask.Task.Resources = []taskresource.TaskResource{mockResource}
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskStopped)
 	container := mTask.Containers[0]
@@ -1449,7 +1386,69 @@ func TestCleanupTaskWithResourceErrorPath(t *testing.T) {
 	mockClient.EXPECT().RemoveContainer(gomock.Any(), dockerContainer.DockerName, gomock.Any()).Return(nil)
 	mockImageManager.EXPECT().RemoveContainerReferenceFromImageState(container).Return(nil)
 	mockState.EXPECT().RemoveTask(mTask.Task)
-	mockResource.EXPECT().Cleanup(gomock.Any()).Return(errors.New("resource cleanup error"))
+	mockResource.EXPECT().GetName()
+	mockResource.EXPECT().Cleanup().Return(nil)
+	mTask.cleanupTask(taskStoppedDuration)
+}
+
+func TestCleanupTaskWithResourceErrorPath(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	mockTime := mock_ttime.NewMockTime(ctrl)
+	mockState := mock_dockerstate.NewMockTaskEngineState(ctrl)
+	mockClient := mock_dockerapi.NewMockDockerClient(ctrl)
+	mockImageManager := mock_engine.NewMockImageManager(ctrl)
+	defer ctrl.Finish()
+
+	cfg := getTestConfig()
+	cfg.TaskCPUMemLimit = config.ExplicitlyEnabled
+	ctx, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	taskEngine := &DockerTaskEngine{
+		ctx:          ctx,
+		cfg:          &cfg,
+		saver:        statemanager.NewNoopStateManager(),
+		state:        mockState,
+		client:       mockClient,
+		imageManager: mockImageManager,
+	}
+	mockResource := mock_taskresource.NewMockTaskResource(ctrl)
+	mTask := &managedTask{
+		ctx:                      ctx,
+		cancel:                   cancel,
+		Task:                     testdata.LoadTask("sleep5TaskCgroup"),
+		_time:                    mockTime,
+		engine:                   taskEngine,
+		acsMessages:              make(chan acsTransition),
+		dockerMessages:           make(chan dockerContainerChange),
+		resourceStateChangeEvent: make(chan resourceStateChange),
+		cfg:			  taskEngine.cfg,
+		saver:			  taskEngine.saver,
+	}
+	mTask.Task.Resources = []taskresource.TaskResource{mockResource}
+	mTask.SetKnownStatus(api.TaskStopped)
+	mTask.SetSentStatus(api.TaskStopped)
+	container := mTask.Containers[0]
+	dockerContainer := &api.DockerContainer{
+		DockerName: "dockerContainer",
+	}
+
+	// Expectations for triggering cleanup
+	now := mTask.GetKnownStatusTime()
+	taskStoppedDuration := 1 * time.Minute
+	mockTime.EXPECT().Now().Return(now).AnyTimes()
+	cleanupTimeTrigger := make(chan time.Time)
+	mockTime.EXPECT().After(gomock.Any()).Return(cleanupTimeTrigger)
+	go func() {
+		cleanupTimeTrigger <- now
+	}()
+
+	// Expectations to verify that the task gets removed
+	mockState.EXPECT().ContainerMapByArn(mTask.Arn).Return(map[string]*api.DockerContainer{container.Name: dockerContainer}, true)
+	mockClient.EXPECT().RemoveContainer(gomock.Any(), dockerContainer.DockerName, gomock.Any()).Return(nil)
+	mockImageManager.EXPECT().RemoveContainerReferenceFromImageState(container).Return(nil)
+	mockState.EXPECT().RemoveTask(mTask.Task)
+	mockResource.EXPECT().GetName()
+	mockResource.EXPECT().Cleanup().Return(errors.New("cleanup error"))
 	mTask.cleanupTask(taskStoppedDuration)
 }
 

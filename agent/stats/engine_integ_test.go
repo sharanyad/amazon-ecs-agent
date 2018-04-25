@@ -339,7 +339,8 @@ func TestStatsEngineWithNewContainers(t *testing.T) {
 
 func TestStatsEngineWithDockerTaskEngine(t *testing.T) {
 	containerChangeEventStream := eventStream("TestStatsEngineWithDockerTaskEngine")
-	taskEngine := ecsengine.NewTaskEngine(&config.Config{}, nil, nil, containerChangeEventStream, nil, dockerstate.NewTaskEngineState(), nil, nil)
+	taskEngine := ecsengine.NewTaskEngine(&config.Config{}, nil, nil, containerChangeEventStream,
+		nil, dockerstate.NewTaskEngineState(), nil, nil)
 	container, err := createHealthContainer(client)
 	require.NoError(t, err, "creating container failed")
 
@@ -425,7 +426,8 @@ func TestStatsEngineWithDockerTaskEngine(t *testing.T) {
 
 func TestStatsEngineWithDockerTaskEngineMissingRemoveEvent(t *testing.T) {
 	containerChangeEventStream := eventStream("TestStatsEngineWithDockerTaskEngineMissingRemoveEvent")
-	taskEngine := ecsengine.NewTaskEngine(&config.Config{}, nil, nil, containerChangeEventStream, nil, dockerstate.NewTaskEngineState(), nil, nil)
+	taskEngine := ecsengine.NewTaskEngine(&config.Config{}, nil, nil, containerChangeEventStream,
+		nil, dockerstate.NewTaskEngineState(), nil, nil)
 
 	container, err := createHealthContainer(client)
 	require.NoError(t, err, "creating container failed")

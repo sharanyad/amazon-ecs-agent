@@ -187,7 +187,7 @@ func TaskFromACS(acsTask *ecsacs.Task, envelope *ecsacs.PayloadMessage) (*Task, 
 // run. It is possible it will be subsequently called after that and should be
 // able to handle such an occurrence appropriately (e.g. behave idempotently).
 func (task *Task) PostUnmarshalTask(cfg *config.Config,
-	credentialsManager credentials.Manager, resourceFields taskresource.ResourceFields) error {
+	credentialsManager credentials.Manager, resourceFields *taskresource.ResourceFields) error {
 	// TODO, add rudimentary plugin support and call any plugins that want to
 	// hook into this
 	task.adjustForPlatform(cfg)

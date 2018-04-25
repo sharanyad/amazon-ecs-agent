@@ -106,7 +106,7 @@ type ecsAgent struct {
 	metadataManager       containermetadata.Manager
 	terminationHandler    sighandlers.TerminationHandler
 	mobyPlugins           mobypkgwrapper.Plugins
-	resourceFields        taskresource.ResourceFields
+	resourceFields        *taskresource.ResourceFields
 }
 
 // newAgent returns a new ecsAgent object, but does not start anything

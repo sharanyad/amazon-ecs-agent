@@ -189,7 +189,7 @@ func contains(capabilities []string, capability string) bool {
 }
 
 func (agent *ecsAgent) initializeResourceFields() {
-	agent.resourceFields = taskresource.ResourceFields{
+	agent.resourceFields = &taskresource.ResourceFields{
 		Control: cgroup.New(),
 		IOUtil:  ioutilwrapper.NewIOUtil(),
 	}

@@ -117,6 +117,6 @@ func (task *Task) dockerCPUShares(containerCPU uint) int64 {
 	return int64(containerCPU)
 }
 
-func (task *Task) initializeCgroupResource(cgroupPath string, resourceFields taskresource.ResourceFields) error {
+func (task *Task) initializeCgroupResource(cgroupPath string, resourceFields *taskresource.ResourceFields) error {
 	return errors.New("unsupported platform")
 }

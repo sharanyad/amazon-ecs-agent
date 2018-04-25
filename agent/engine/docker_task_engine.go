@@ -121,7 +121,7 @@ type DockerTaskEngine struct {
 	// verification logic gets executed to set it to a low interval
 	taskSteadyStatePollInterval time.Duration
 
-	resourceFields taskresource.ResourceFields
+	resourceFields *taskresource.ResourceFields
 }
 
 // NewDockerTaskEngine returns a created, but uninitialized, DockerTaskEngine.
@@ -135,7 +135,7 @@ func NewDockerTaskEngine(cfg *config.Config,
 	imageManager ImageManager,
 	state dockerstate.TaskEngineState,
 	metadataManager containermetadata.Manager,
-	resourceFields taskresource.ResourceFields) *DockerTaskEngine {
+	resourceFields *taskresource.ResourceFields) *DockerTaskEngine {
 	dockerTaskEngine := &DockerTaskEngine{
 		cfg:    cfg,
 		client: client,

@@ -52,14 +52,14 @@ func (task *Task) adjustForPlatform(cfg *config.Config) {
 	task.MemoryCPULimitsEnabled = cfg.TaskCPUMemLimit.Enabled()
 }
 
-func (task *Task) initializeCgroupResource(cgroupPath string, resourceFields taskresource.ResourceFields) error {
+func (task *Task) initializeCgroupResource(cgroupPath string, resourceFields *taskresource.ResourceFields) error {
 	cgroupRoot, err := task.BuildCgroupRoot()
 	if err != nil {
-		return errors.Wrapf(err, "cgroup resource: unable to determine cgroup root for task: %s", task.Arn)
+		return errors.Wrapf(err, "cgroup resource: unable to determine cgroup root for task")
 	}
 	resSpec, err := task.BuildLinuxResourceSpec()
 	if err != nil {
-		return errors.Wrapf(err, "cgroup resource: unable to build resource spec for task: %s", task.Arn)
+		return errors.Wrapf(err, "cgroup resource: unable to build resource spec for task")
 	}
 	cgroupResource := cgroup.NewCgroupResource(task.Arn, resourceFields.Control,
 		resourceFields.IOUtil, cgroupRoot, cgroupPath, resSpec)
