@@ -23,6 +23,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/engine"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -39,7 +40,8 @@ func TestLoadsV1DataCorrectly(t *testing.T) {
 	defer cleanup()
 	cfg := &config.Config{DataDir: filepath.Join(".", "testdata", "v1", "1")}
 
-	taskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, nil, dockerstate.NewTaskEngineState(), nil, nil)
+	taskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, nil, dockerstate.NewTaskEngineState(),
+		nil, taskresource.ResourceFields{})
 	var containerInstanceArn, cluster, savedInstanceID string
 	var sequenceNumber int64
 

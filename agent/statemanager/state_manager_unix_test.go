@@ -26,6 +26,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate"
 	engine_testutils "github.com/aws/amazon-ecs-agent/agent/engine/testutils"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -43,9 +44,11 @@ func TestStateManager(t *testing.T) {
 
 	// Now let's make some state to save
 	containerInstanceArn := ""
-	taskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, nil, dockerstate.NewTaskEngineState(), nil, nil)
+	taskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, nil, dockerstate.NewTaskEngineState(),
+		nil, taskresource.ResourceFields{})
 
-	manager, err = statemanager.NewStateManager(cfg, statemanager.AddSaveable("TaskEngine", taskEngine), statemanager.AddSaveable("ContainerInstanceArn", &containerInstanceArn))
+	manager, err = statemanager.NewStateManager(cfg, statemanager.AddSaveable("TaskEngine", taskEngine),
+		statemanager.AddSaveable("ContainerInstanceArn", &containerInstanceArn))
 	require.Nil(t, err)
 
 	containerInstanceArn = "containerInstanceArn"
@@ -59,10 +62,12 @@ func TestStateManager(t *testing.T) {
 	assertFileMode(t, filepath.Join(tmpDir, "ecs_agent_data.json"))
 
 	// Now make sure we can load that state sanely
-	loadedTaskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, nil, dockerstate.NewTaskEngineState(), nil, nil)
+	loadedTaskEngine := engine.NewTaskEngine(&config.Config{}, nil, nil, nil, nil, dockerstate.NewTaskEngineState(),
+		nil, taskresource.ResourceFields{})
 	var loadedContainerInstanceArn string
 
-	manager, err = statemanager.NewStateManager(cfg, statemanager.AddSaveable("TaskEngine", &loadedTaskEngine), statemanager.AddSaveable("ContainerInstanceArn", &loadedContainerInstanceArn))
+	manager, err = statemanager.NewStateManager(cfg, statemanager.AddSaveable("TaskEngine", &loadedTaskEngine),
+		statemanager.AddSaveable("ContainerInstanceArn", &loadedContainerInstanceArn))
 	require.Nil(t, err)
 
 	err = manager.Load()

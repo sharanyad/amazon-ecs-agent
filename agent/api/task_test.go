@@ -26,6 +26,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/credentials/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/dockerclient"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
 
 	"github.com/aws/aws-sdk-go/aws"
@@ -561,7 +562,7 @@ func TestPostUnmarshalTaskWithEmptyVolumes(t *testing.T) {
 	assert.Nil(t, err, "Should be able to handle acs task")
 	assert.Equal(t, 2, len(task.Containers)) // before PostUnmarshalTask
 	cfg := config.Config{}
-	task.PostUnmarshalTask(&cfg, nil)
+	task.PostUnmarshalTask(&cfg, nil, taskresource.ResourceFields{})
 
 	assert.Equal(t, 3, len(task.Containers), "Should include new container for volumes")
 	emptyContainer, ok := task.ContainerByName(emptyHostVolumeName)

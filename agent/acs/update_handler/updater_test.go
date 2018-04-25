@@ -33,6 +33,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/httpclient/mock"
 	"github.com/aws/amazon-ecs-agent/agent/sighandlers/exitcodes"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	mock_client "github.com/aws/amazon-ecs-agent/agent/wsclient/mock"
 )
 
@@ -105,7 +106,7 @@ func TestPerformUpdateWithUpdatesDisabled(t *testing.T) {
 		Reason:            ptr("Updates are disabled").(*string),
 	}})
 
-	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, nil)
+	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, taskresource.ResourceFields{})
 	msg := &ecsacs.PerformUpdateMessage{
 		ClusterArn:           ptr("cluster").(*string),
 		ContainerInstanceArn: ptr("containerInstance").(*string),
@@ -162,7 +163,7 @@ func TestFullUpdateFlow(t *testing.T) {
 
 			require.Equal(t, "update-tar-data", writtenFile.String(), "incorrect data written")
 
-			taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, nil)
+			taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, taskresource.ResourceFields{})
 			msg := &ecsacs.PerformUpdateMessage{
 				ClusterArn:           ptr("cluster").(*string),
 				ContainerInstanceArn: ptr("containerInstance").(*string),
@@ -230,7 +231,7 @@ func TestUndownloadedUpdate(t *testing.T) {
 		MessageId:         ptr("mid").(*string),
 	}})
 
-	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, nil)
+	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, taskresource.ResourceFields{})
 	msg := &ecsacs.PerformUpdateMessage{
 		ClusterArn:           ptr("cluster").(*string),
 		ContainerInstanceArn: ptr("containerInstance").(*string),
@@ -291,7 +292,7 @@ func TestDuplicateUpdateMessagesWithSuccess(t *testing.T) {
 
 	require.Equal(t, "update-tar-data", writtenFile.String(), "incorrect data written")
 
-	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, nil)
+	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, taskresource.ResourceFields{})
 	msg := &ecsacs.PerformUpdateMessage{
 		ClusterArn:           ptr("cluster").(*string),
 		ContainerInstanceArn: ptr("containerInstance").(*string),
@@ -359,7 +360,7 @@ func TestDuplicateUpdateMessagesWithFailure(t *testing.T) {
 
 	require.Equal(t, "update-tar-data", writtenFile.String(), "incorrect data written")
 
-	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, nil)
+	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, taskresource.ResourceFields{})
 	msg := &ecsacs.PerformUpdateMessage{
 		ClusterArn:           ptr("cluster").(*string),
 		ContainerInstanceArn: ptr("containerInstance").(*string),
@@ -435,7 +436,7 @@ func TestNewerUpdateMessages(t *testing.T) {
 
 	require.Equal(t, "newer-update-tar-data", writtenFile.String(), "incorrect data written")
 
-	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, nil)
+	taskEngine := engine.NewTaskEngine(cfg, nil, nil, nil, nil, nil, nil, taskresource.ResourceFields{})
 	msg := &ecsacs.PerformUpdateMessage{
 		ClusterArn:           ptr("cluster").(*string),
 		ContainerInstanceArn: ptr("containerInstance").(*string),

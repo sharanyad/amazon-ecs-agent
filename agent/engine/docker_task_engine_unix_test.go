@@ -25,12 +25,12 @@ import (
 
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	"github.com/aws/amazon-ecs-agent/agent/config"
+	"github.com/aws/amazon-ecs-agent/agent/credentials"
 	"github.com/aws/amazon-ecs-agent/agent/dockerclient/dockerapi"
 	"github.com/aws/amazon-ecs-agent/agent/emptyvolume"
 	"github.com/aws/amazon-ecs-agent/agent/engine/dockerstate/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/engine/testdata"
 	"github.com/aws/amazon-ecs-agent/agent/resources/cgroup/mock_control"
-	"github.com/aws/amazon-ecs-agent/agent/resources/mock_resources"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager/mocks"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/taskresource/cgroup"
@@ -82,26 +82,28 @@ func TestDeleteTask(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
+	mockControl := mock_cgroup.NewMockControl(ctrl)
+	cgroupResource := cgroup.NewCgroupResource("", mockControl, nil, "cgroupRoot", "", specs.LinuxResources{})
 	task := &api.Task{
 		ENI: &api.ENI{
 			MacAddress: mac,
 		},
+		Resources: []taskresource.TaskResource{cgroupResource},
 	}
 
 	cfg := defaultConfig
 	cfg.TaskCPUMemLimit = config.ExplicitlyEnabled
 	mockState := mock_dockerstate.NewMockTaskEngineState(ctrl)
 	mockSaver := mock_statemanager.NewMockStateManager(ctrl)
-	mockResource := mock_resources.NewMockResource(ctrl)
+
 	taskEngine := &DockerTaskEngine{
-		state:    mockState,
-		saver:    mockSaver,
-		cfg:      &cfg,
-		resource: mockResource,
+		state: mockState,
+		saver: mockSaver,
+		cfg:   &cfg,
 	}
 
 	gomock.InOrder(
-		mockResource.EXPECT().Cleanup(task).Return(errors.New("error")),
+		mockControl.EXPECT().Remove("cgroupRoot").Return(nil),
 		mockState.EXPECT().RemoveTask(task),
 		mockState.EXPECT().RemoveENIAttachment(mac),
 		mockSaver.EXPECT().Save(),
@@ -148,8 +150,8 @@ func TestResourceContainerProgression(t *testing.T) {
 	assert.NoError(t, err)
 	cgroupMemoryPath := fmt.Sprintf("/sys/fs/cgroup/memory/ecs/%s/memory.use_hierarchy", taskID)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
-	cgroupResource := cgroup.NewCgroupResource(sleepTask.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
-	cgroupResource.SetIOUtil(mockIO)
+	cgroupResource := cgroup.NewCgroupResource(sleepTask.Arn, mockControl, mockIO,
+		cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 
 	sleepTask.Resources = []taskresource.TaskResource{cgroupResource}
 	sleepTask.Resources[0].SetDesiredStatus(taskresource.ResourceCreated)
@@ -224,7 +226,8 @@ func TestResourceContainerProgressionFailure(t *testing.T) {
 	taskID, err := sleepTask.GetID()
 	assert.NoError(t, err)
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
-	cgroupResource := cgroup.NewCgroupResource(sleepTask.Arn, mockControl, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
+	cgroupResource := cgroup.NewCgroupResource(sleepTask.Arn, mockControl, nil, cgroupRoot,
+		cgroupMountPath, specs.LinuxResources{})
 
 	sleepTask.Resources = []taskresource.TaskResource{cgroupResource}
 	sleepTask.Resources[0].SetDesiredStatus(taskresource.ResourceCreated)
@@ -248,4 +251,152 @@ func TestResourceContainerProgressionFailure(t *testing.T) {
 	cleanup := make(chan time.Time, 1)
 	mockTime.EXPECT().After(gomock.Any()).Return(cleanup).AnyTimes()
 	waitForStopEvents(t, taskEngine.StateChangeEvents(), true)
+}
+
+func TestTaskCPULimitHappyPath(t *testing.T) {
+	testcases := []struct {
+		name                string
+		metadataCreateError error
+		metadataUpdateError error
+		metadataCleanError  error
+		taskCPULimit        config.Conditional
+	}{
+		{
+			name:                "Task CPU Limit Succeeds",
+			metadataCreateError: nil,
+			metadataUpdateError: nil,
+			metadataCleanError:  nil,
+			taskCPULimit:        config.ExplicitlyEnabled,
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			metadataConfig := defaultConfig
+			metadataConfig.TaskCPUMemLimit = tc.taskCPULimit
+			metadataConfig.ContainerMetadataEnabled = true
+			ctx, cancel := context.WithCancel(context.TODO())
+			defer cancel()
+			ctrl, client, mockTime, taskEngine, credentialsManager, imageManager, metadataManager := mocks(
+				t, ctx, &metadataConfig)
+			defer ctrl.Finish()
+
+			roleCredentials := credentials.TaskIAMRoleCredentials{
+				IAMRoleCredentials: credentials.IAMRoleCredentials{CredentialsID: "credsid"},
+			}
+			credentialsManager.EXPECT().GetTaskCredentials(credentialsID).Return(roleCredentials, true).AnyTimes()
+			credentialsManager.EXPECT().RemoveCredentials(credentialsID)
+
+			sleepTask := testdata.LoadTask("sleep5")
+			sleepContainer := sleepTask.Containers[0]
+			sleepContainer.TransitionDependenciesMap = make(map[api.ContainerStatus]api.TransitionDependencySet)
+			sleepTask.SetCredentialsID(credentialsID)
+			eventStream := make(chan dockerapi.DockerContainerChangeEvent)
+			// containerEventsWG is used to force the test to wait until the container created and started
+			// events are processed
+			containerEventsWG := sync.WaitGroup{}
+
+			if dockerVersionCheckDuringInit {
+				client.EXPECT().Version().Return("1.12.6", nil)
+			}
+			client.EXPECT().ContainerEvents(gomock.Any()).Return(eventStream, nil)
+			containerName := make(chan string)
+			go func() {
+				name := <-containerName
+				setCreatedContainerName(name)
+			}()
+			mockControl := mock_cgroup.NewMockControl(ctrl)
+			mockIO := mock_ioutilwrapper.NewMockIOUtil(ctrl)
+			taskID, err := sleepTask.GetID()
+			assert.NoError(t, err)
+			cgroupMemoryPath := fmt.Sprintf("/sys/fs/cgroup/memory/ecs/%s/memory.use_hierarchy", taskID)
+			if tc.taskCPULimit.Enabled() {
+				// TODO Currently, the resource Setup() method gets invoked multiple
+				// times for a task. This is really a bug and a fortunate occurrence
+				// that cgroup creation APIs behave idempotently.
+				//
+				// This should be modified so that 'Setup' is invoked exactly once
+				// by moving the cgroup creation to a "resource setup" step in the
+				// task life-cycle and performing the setup only in this stage
+				taskEngine.(*DockerTaskEngine).resourceFields = taskresource.ResourceFields{
+					Control: mockControl,
+					IOUtil:  mockIO,
+				}
+				mockControl.EXPECT().Exists(gomock.Any()).Return(false)
+				mockControl.EXPECT().Create(gomock.Any()).Return(nil, nil)
+				mockIO.EXPECT().WriteFile(cgroupMemoryPath, gomock.Any(), gomock.Any()).Return(nil)
+			}
+
+			for _, container := range sleepTask.Containers {
+				validateContainerRunWorkflow(t, container, sleepTask, imageManager,
+					client, &roleCredentials, containerEventsWG,
+					eventStream, containerName, func() {
+						metadataManager.EXPECT().Create(gomock.Any(), gomock.Any(),
+							gomock.Any(), gomock.Any()).Return(tc.metadataCreateError)
+						metadataManager.EXPECT().Update(gomock.Any(), gomock.Any(), gomock.Any(),
+							gomock.Any()).Return(tc.metadataUpdateError)
+					})
+			}
+
+			addTaskToEngine(t, ctx, taskEngine, sleepTask, mockTime, containerEventsWG)
+			cleanup := make(chan time.Time, 1)
+			defer close(cleanup)
+			mockTime.EXPECT().After(gomock.Any()).Return(cleanup).MinTimes(1)
+			client.EXPECT().DescribeContainer(gomock.Any(), gomock.Any()).AnyTimes()
+			// Simulate a container stop event from docker
+			eventStream <- dockerapi.DockerContainerChangeEvent{
+				Status: api.ContainerStopped,
+				DockerContainerMetadata: dockerapi.DockerContainerMetadata{
+					DockerID: containerID,
+					ExitCode: aws.Int(exitCode),
+				},
+			}
+
+			// StopContainer might be invoked if the test execution is slow, during
+			// the cleanup phase. Account for that.
+			client.EXPECT().StopContainer(gomock.Any(), gomock.Any(), gomock.Any()).Return(
+				dockerapi.DockerContainerMetadata{DockerID: containerID}).AnyTimes()
+			waitForStopEvents(t, taskEngine.StateChangeEvents(), true)
+			// This ensures that managedTask.waitForStopReported makes progress
+			sleepTask.SetSentStatus(api.TaskStopped)
+			// Extra events should not block forever; duplicate acs and docker events are possible
+			go func() { eventStream <- createDockerEvent(api.ContainerStopped) }()
+			go func() { eventStream <- createDockerEvent(api.ContainerStopped) }()
+
+			sleepTaskStop := testdata.LoadTask("sleep5")
+			sleepContainer = sleepTaskStop.Containers[0]
+			sleepContainer.TransitionDependenciesMap = make(map[api.ContainerStatus]api.TransitionDependencySet)
+			sleepTaskStop.SetCredentialsID(credentialsID)
+			sleepTaskStop.SetDesiredStatus(api.TaskStopped)
+			taskEngine.AddTask(sleepTaskStop)
+			// As above, duplicate events should not be a problem
+			taskEngine.AddTask(sleepTaskStop)
+			taskEngine.AddTask(sleepTaskStop)
+			cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
+			if tc.taskCPULimit.Enabled() {
+				mockControl.EXPECT().Remove(cgroupRoot).Return(nil)
+			}
+			// Expect a bunch of steady state 'poll' describes when we trigger cleanup
+			client.EXPECT().RemoveContainer(gomock.Any(), gomock.Any(), gomock.Any()).Do(
+				func(ctx interface{}, removedContainerName string, timeout time.Duration) {
+					assert.Equal(t, getCreatedContainerName(), removedContainerName,
+						"Container name mismatch")
+				}).Return(nil)
+
+			imageManager.EXPECT().RemoveContainerReferenceFromImageState(gomock.Any())
+			metadataManager.EXPECT().Clean(gomock.Any()).Return(tc.metadataCleanError)
+			// trigger cleanup
+			cleanup <- time.Now()
+			go func() { eventStream <- createDockerEvent(api.ContainerStopped) }()
+			// Wait for the task to actually be dead; if we just fallthrough immediately,
+			// the remove might not have happened (expectation failure)
+			for {
+				tasks, _ := taskEngine.(*DockerTaskEngine).ListTasks()
+				if len(tasks) == 0 {
+					break
+				}
+				time.Sleep(5 * time.Millisecond)
+			}
+		})
+	}
 }
