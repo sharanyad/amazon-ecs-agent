@@ -15,28 +15,9 @@
 
 package functional_tests
 
-import (
-	"bytes"
-	"fmt"
-	"io/ioutil"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strconv"
-	"strings"
-	"testing"
-	"time"
-
-	ecsapi "github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
+/*import (
 	. "github.com/aws/amazon-ecs-agent/agent/functional_tests/util"
-	"github.com/aws/amazon-ecs-agent/agent/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
-	docker "github.com/fsouza/go-dockerclient"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
+)*/
 
 const (
 	savedStateTaskDefinition        = "nginx"
@@ -50,7 +31,7 @@ const (
 
 // TestRunManyTasks runs several tasks in short succession and expects them to
 // all run.
-func TestRunManyTasks(t *testing.T) {
+/*func TestRunManyTasks(t *testing.T) {
 	agent := RunAgent(t, nil)
 	defer agent.Cleanup()
 
@@ -852,4 +833,4 @@ func TestContainerHealthMetricsWithStartPeriod(t *testing.T) {
 	// TODO remove this after backend changes deployed
 	t.Skip("Not supported")
 	containerHealthWithStartPeriodTest(t, "container-health")
-}
+}*/

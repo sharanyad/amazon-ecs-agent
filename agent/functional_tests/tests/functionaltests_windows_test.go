@@ -15,21 +15,9 @@
 
 package functional_tests
 
-import (
-	"fmt"
-	"os"
-	"strings"
-	"testing"
-	"time"
-
+/*import (
 	. "github.com/aws/amazon-ecs-agent/agent/functional_tests/util"
-	"github.com/aws/amazon-ecs-agent/agent/utils"
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
+)*/
 
 const (
 	savedStateTaskDefinition        = "savedstate-windows"
@@ -41,7 +29,7 @@ const (
 )
 
 // TestAWSLogsDriver verifies that container logs are sent to Amazon CloudWatch Logs with awslogs as the log driver
-func TestAWSLogsDriver(t *testing.T) {
+/*func TestAWSLogsDriver(t *testing.T) {
 	RequireDockerVersion(t, ">=1.9.0") // awslogs drivers available from docker 1.9.0
 	cwlClient := cloudwatchlogs.New(session.New(), aws.NewConfig().WithRegion(*ECS.Config.Region))
 	// Test whether the log group existed or not
@@ -353,4 +341,4 @@ func TestContainerHealthMetricsWithStartPeriod(t *testing.T) {
 	// TODO remove this after backend changes deployed
 	t.Skip("Not supported")
 	containerHealthWithStartPeriodTest(t, "container-health-windows")
-}
+}*/

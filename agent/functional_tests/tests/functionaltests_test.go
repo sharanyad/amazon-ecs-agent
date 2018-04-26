@@ -16,27 +16,10 @@
 package functional_tests
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"reflect"
-	"runtime"
-	"strconv"
 	"testing"
 	"time"
 
-	ecsapi "github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
 	. "github.com/aws/amazon-ecs-agent/agent/functional_tests/util"
-
-	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/aws/awserr"
-	"github.com/aws/aws-sdk-go/aws/session"
-	"github.com/aws/aws-sdk-go/service/cloudwatch"
-	"github.com/aws/aws-sdk-go/service/cloudwatchlogs"
-	"github.com/docker/docker/pkg/system"
-	"github.com/pborman/uuid"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 const (
@@ -53,7 +36,7 @@ const (
 )
 
 // TestPullInvalidImage verifies that an invalid image returns an error
-func TestPullInvalidImage(t *testing.T) {
+/*func TestPullInvalidImage(t *testing.T) {
 	agent := RunAgent(t, nil)
 	defer agent.Cleanup()
 
@@ -64,7 +47,7 @@ func TestPullInvalidImage(t *testing.T) {
 	if err = testTask.ExpectErrorType("error", "CannotPullContainerError", 1*time.Minute); err != nil {
 		t.Error(err)
 	}
-}
+}*/
 
 // TestSavedState verifies that stopping the agent, stopping a container under
 // its control, and starting the agent results in that container being moved to
@@ -107,7 +90,7 @@ func TestSavedState(t *testing.T) {
 // TestSavedStateWithInvalidImageAndCleanup verifies that a task definition with an invalid image does not prevent the
 // agnet from starting again after the task has been cleaned up.  See
 // https://github.com/aws/amazon-ecs-agent/issues/1024 for details.
-func TestSavedStateWithInvalidImageAndCleanup(t *testing.T) {
+/*func TestSavedStateWithInvalidImageAndCleanup(t *testing.T) {
 	// Set the task cleanup time to just over a minute.
 	os.Setenv("ECS_ENGINE_TASK_CLEANUP_WAIT_DURATION", "70s")
 	agent := RunAgent(t, nil)
@@ -566,4 +549,4 @@ func waitCloudwatchLogs(client *cloudwatchlogs.CloudWatchLogs, params *cloudwatc
 	}
 
 	return nil, fmt.Errorf("Timeout waiting for the logs to be sent to cloud watch logs")
-}
+}*/

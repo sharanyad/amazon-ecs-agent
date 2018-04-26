@@ -19,16 +19,12 @@
 // This file should not be edited; rather you should edit the generator instead
 package simpletest
 
-import (
-	"os"
-	"testing"
-	"time"
-
+/*import (
 	. "github.com/aws/amazon-ecs-agent/agent/functional_tests/util"
-)
+)*/
 
 // TestAddAndDropCapabilities checks that adding and dropping Linux capabilities work
-func TestAddAndDropCapabilities(t *testing.T) {
+/*func TestAddAndDropCapabilities(t *testing.T) {
 
 	// Parallel is opt in because resource constraints could cause test failures
 	// on smaller instances
@@ -920,4 +916,4 @@ func TestWorkingDir(t *testing.T) {
 		defer agent.SweepTask(testTask)
 	}
 
-}
+}*/
