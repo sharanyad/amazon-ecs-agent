@@ -64,7 +64,7 @@ func (task *Task) initializeCgroupResourceSpec(cgroupPath string, resourceFields
 	}
 	cgroupResource := cgroup.NewCgroupResource(task.Arn, resourceFields.Control,
 		resourceFields.IOUtil, cgroupRoot, cgroupPath, resSpec)
-	task.Resources = append(task.Resources, cgroupResource)
+	task.AddResource("cgroup", cgroupResource)
 	for _, container := range task.Containers {
 		container.BuildResourceDependency(cgroupResource.GetName(),
 			taskresource.ResourceStatus(cgroup.CgroupCreated),

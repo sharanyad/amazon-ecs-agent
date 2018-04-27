@@ -463,7 +463,8 @@ func (engine *DockerTaskEngine) sweepTask(task *api.Task) {
 }
 
 func (engine *DockerTaskEngine) deleteTask(task *api.Task) {
-	for _, resource := range task.Resources {
+	resources := task.GetResources()
+	for _, resource := range resources {
 		err := resource.Cleanup()
 		if err != nil {
 			seelog.Warnf("Task engine [%s]: unable to cleanup resource %s: %v",
