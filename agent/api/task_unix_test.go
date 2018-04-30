@@ -408,6 +408,7 @@ func TestInitCgroupResourceSpecHappyPath(t *testing.T) {
 			},
 		},
 		MemoryCPULimitsEnabled: true,
+		ResourcesMapUnsafe:     make(map[string][]taskresource.TaskResource),
 	}
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
@@ -417,7 +418,7 @@ func TestInitCgroupResourceSpecHappyPath(t *testing.T) {
 		Control: mockControl,
 		IOUtil:  mockIO,
 	}))
-	assert.Equal(t, 1, len(task.Resources))
+	assert.Equal(t, 1, len(task.GetResources()))
 	assert.Equal(t, 1, len(task.Containers[0].TransitionDependenciesMap))
 }
 
@@ -433,9 +434,10 @@ func TestInitCgroupResourceSpecInvalidARN(t *testing.T) {
 			},
 		},
 		MemoryCPULimitsEnabled: true,
+		ResourcesMapUnsafe:     make(map[string][]taskresource.TaskResource),
 	}
 	assert.Error(t, task.initializeCgroupResourceSpec("", nil))
-	assert.Equal(t, 0, len(task.Resources))
+	assert.Equal(t, 0, len(task.GetResources()))
 	assert.Equal(t, 0, len(task.Containers[0].TransitionDependenciesMap))
 }
 
@@ -453,9 +455,10 @@ func TestInitCgroupResourceSpecInvalidMem(t *testing.T) {
 			},
 		},
 		MemoryCPULimitsEnabled: true,
+		ResourcesMapUnsafe:     make(map[string][]taskresource.TaskResource),
 	}
 	assert.Error(t, task.initializeCgroupResourceSpec("", nil))
-	assert.Equal(t, 0, len(task.Resources))
+	assert.Equal(t, 0, len(task.GetResources()))
 	assert.Equal(t, 0, len(task.Containers[0].TransitionDependenciesMap))
 }
 
@@ -470,11 +473,12 @@ func TestPostUnmarshalWithCPULimitsFail(t *testing.T) {
 				TransitionDependenciesMap: make(map[apicontainer.ContainerStatus]apicontainer.TransitionDependencySet),
 			},
 		},
+		ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 	}
 	cfg := config.Config{
 		TaskCPUMemLimit: config.ExplicitlyEnabled,
 	}
 	assert.Error(t, task.PostUnmarshalTask(&cfg, nil, nil))
-	assert.Equal(t, 0, len(task.Resources))
+	assert.Equal(t, 0, len(task.GetResources()))
 	assert.Equal(t, 0, len(task.Containers[0].TransitionDependenciesMap))
 }

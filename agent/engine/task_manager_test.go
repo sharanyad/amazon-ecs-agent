@@ -991,7 +991,9 @@ func TestCleanupTask(t *testing.T) {
 		cfg:   taskEngine.cfg,
 		saver: taskEngine.saver,
 	}
-	mTask.Task.Resources = []taskresource.TaskResource{mockResource}
+	//mTask.Task.Resources = []taskresource.TaskResource{mockResource}
+	mTask.Task.ResourcesMapUnsafe = make(map[string][]taskresource.TaskResource)
+	mTask.AddResource("mockResource", mockResource)
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskStopped)
 	container := mTask.Containers[0]
@@ -1361,10 +1363,12 @@ func TestCleanupTaskWithResourceHappyPath(t *testing.T) {
 		acsMessages:              make(chan acsTransition),
 		dockerMessages:           make(chan dockerContainerChange),
 		resourceStateChangeEvent: make(chan resourceStateChange),
-		cfg:			  taskEngine.cfg,
-		saver:			  taskEngine.saver,
+		cfg:   taskEngine.cfg,
+		saver: taskEngine.saver,
 	}
-	mTask.Task.Resources = []taskresource.TaskResource{mockResource}
+	//mTask.Task.Resources = []taskresource.TaskResource{mockResource}
+	mTask.Task.ResourcesMapUnsafe = make(map[string][]taskresource.TaskResource)
+	mTask.AddResource("mockResource", mockResource)
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskStopped)
 	container := mTask.Containers[0]
@@ -1422,10 +1426,12 @@ func TestCleanupTaskWithResourceErrorPath(t *testing.T) {
 		acsMessages:              make(chan acsTransition),
 		dockerMessages:           make(chan dockerContainerChange),
 		resourceStateChangeEvent: make(chan resourceStateChange),
-		cfg:			  taskEngine.cfg,
-		saver:			  taskEngine.saver,
+		cfg:   taskEngine.cfg,
+		saver: taskEngine.saver,
 	}
-	mTask.Task.Resources = []taskresource.TaskResource{mockResource}
+	//mTask.Task.Resources = []taskresource.TaskResource{mockResource}
+	mTask.Task.ResourcesMapUnsafe = make(map[string][]taskresource.TaskResource)
+	mTask.AddResource("mockResource", mockResource)
 	mTask.SetKnownStatus(api.TaskStopped)
 	mTask.SetSentStatus(api.TaskStopped)
 	container := mTask.Containers[0]
@@ -1522,7 +1528,8 @@ func TestWaitForHostResources(t *testing.T) {
 func TestWaitForResourceTransition(t *testing.T) {
 	task := &managedTask{
 		Task: &api.Task{
-			Resources: []taskresource.TaskResource{},
+			//Resources: []taskresource.TaskResource{},
+			ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 		},
 	}
 	transition := make(chan struct{}, 1)
@@ -1551,8 +1558,9 @@ func TestApplyResourceStateHappyPath(t *testing.T) {
 	mockResource := mock_taskresource.NewMockTaskResource(ctrl)
 	task := &managedTask{
 		Task: &api.Task{
-			Arn:       "arn",
-			Resources: []taskresource.TaskResource{},
+			Arn: "arn",
+			//Resources: []taskresource.TaskResource{},
+			ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 		},
 	}
 	gomock.InOrder(
@@ -1588,8 +1596,9 @@ func TestApplyResourceStateFailures(t *testing.T) {
 			mockResource := mock_taskresource.NewMockTaskResource(ctrl)
 			task := &managedTask{
 				Task: &api.Task{
-					Arn:       "arn",
-					Resources: []taskresource.TaskResource{},
+					Arn: "arn",
+					//Resources: []taskresource.TaskResource{},
+					ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 				},
 			}
 			gomock.InOrder(

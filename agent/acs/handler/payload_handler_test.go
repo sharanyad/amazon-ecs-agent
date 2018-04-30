@@ -27,6 +27,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/eventhandler"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager"
 	"github.com/aws/amazon-ecs-agent/agent/statemanager/mocks"
+	"github.com/aws/amazon-ecs-agent/agent/taskresource"
 	"github.com/aws/amazon-ecs-agent/agent/wsclient/mock"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/golang/mock/gomock"
@@ -141,7 +142,8 @@ func TestHandlePayloadMessageStateSaveError(t *testing.T) {
 
 	// We expect task to be added to the engine even though it hasn't been saved
 	expectedTask := &api.Task{
-		Arn: "t1",
+		Arn:                "t1",
+		ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 	}
 
 	assert.Equal(t, addedTask, expectedTask, "added task is not expected")
@@ -187,7 +189,8 @@ func TestHandlePayloadMessageAckedWhenTaskAdded(t *testing.T) {
 
 	// Verify if task added == expected task
 	expectedTask := &api.Task{
-		Arn: "t1",
+		Arn:                "t1",
+		ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 	}
 	assert.Equal(t, addedTask, expectedTask, "received task is not expected")
 }
@@ -363,7 +366,8 @@ func TestPayloadBufferHandler(t *testing.T) {
 
 	// Verify if the task added to the engine is correct
 	expectedTask := &api.Task{
-		Arn: taskArn,
+		Arn:                taskArn,
+		ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 	}
 	assert.Equal(t, addedTask, expectedTask, "received task is not expected")
 }
@@ -595,7 +599,8 @@ func validateTaskAndCredentials(taskCredentialsAck,
 	}
 
 	expectedTask := &api.Task{
-		Arn: expectedTaskArn,
+		Arn:                expectedTaskArn,
+		ResourcesMapUnsafe: make(map[string][]taskresource.TaskResource),
 	}
 	expectedTask.SetCredentialsID(expectedTaskCredentials.CredentialsID)
 

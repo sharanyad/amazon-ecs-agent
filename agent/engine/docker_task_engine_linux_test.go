@@ -69,9 +69,10 @@ func TestResourceContainerProgression(t *testing.T) {
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 	cgroupResource := cgroup.NewCgroupResource(sleepTask.Arn, mockControl, mockIO, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 
-	sleepTask.Resources = []taskresource.TaskResource{cgroupResource}
-	sleepTask.Resources[0].SetDesiredStatus(taskresource.ResourceCreated)
-
+	//sleepTask.Resources = []taskresource.TaskResource{cgroupResource}
+	//sleepTask.Resources[0].SetDesiredStatus(taskresource.ResourceCreated)
+	sleepTask.ResourcesMapUnsafe = make(map[string][]taskresource.TaskResource)
+	sleepTask.AddResource("cgroup", cgroupResource)
 	eventStream := make(chan dockerapi.DockerContainerChangeEvent)
 	// containerEventsWG is used to force the test to wait until the container created and started
 	// events are processed
@@ -144,9 +145,10 @@ func TestResourceContainerProgressionFailure(t *testing.T) {
 	cgroupRoot := fmt.Sprintf("/ecs/%s", taskID)
 	cgroupResource := cgroup.NewCgroupResource(sleepTask.Arn, mockControl, nil, cgroupRoot, cgroupMountPath, specs.LinuxResources{})
 
-	sleepTask.Resources = []taskresource.TaskResource{cgroupResource}
-	sleepTask.Resources[0].SetDesiredStatus(taskresource.ResourceCreated)
-
+	//sleepTask.Resources = []taskresource.TaskResource{cgroupResource}
+	//sleepTask.Resources[0].SetDesiredStatus(taskresource.ResourceCreated)
+	sleepTask.ResourcesMapUnsafe = make(map[string][]taskresource.TaskResource)
+	sleepTask.AddResource("cgroup", cgroupResource)
 	eventStream := make(chan dockerapi.DockerContainerChangeEvent)
 	if dockerVersionCheckDuringInit {
 		client.EXPECT().Version()
