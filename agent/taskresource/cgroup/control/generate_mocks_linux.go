@@ -13,6 +13,6 @@
 // express or implied. See the License for the specific language governing
 // permissions and limitations under the License.
 
-package cgroup
+package control
 
 //go:generate go run ../../../scripts/generate/mockgen.go github.com/aws/amazon-ecs-agent/agent/resources/cgroup Control mock_control/mock_cgroup_control_linux.go

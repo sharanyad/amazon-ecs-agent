@@ -17,7 +17,7 @@
 package mock_cgroup
 
 import (
-	cgroup "github.com/aws/amazon-ecs-agent/agent/resources/cgroup"
+	cgroup "github.com/aws/amazon-ecs-agent/agent/taskresource/cgroup/control"
 	cgroups "github.com/containerd/cgroups"
 	gomock "github.com/golang/mock/gomock"
 )
