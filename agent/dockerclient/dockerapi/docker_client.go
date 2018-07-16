@@ -667,7 +667,11 @@ func (dg *dockerGoClient) inspectContainer(ctx context.Context, dockerID string)
 	if err != nil {
 		return nil, err
 	}
-	return client.InspectContainerWithContext(dockerID, ctx)
+	inspectContainerBegin := time.Now()
+	cont, err := client.InspectContainerWithContext(dockerID, ctx)
+	seelog.Infof("inspect container took: %s, %s",
+		cont.ID, time.Since(inspectContainerBegin))
+	return cont, err
 }
 
 func (dg *dockerGoClient) StopContainer(ctx context.Context, dockerID string, timeout time.Duration) DockerContainerMetadata {
