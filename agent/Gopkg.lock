@@ -22,6 +22,14 @@
 
 [[projects]]
   branch = "master"
+  digest = "1:36d1549972d1ebac59f3b15708485666761d8051f675776193ccb1be3cb6ea84"
+  name = "github.com/NVIDIA/gpu-monitoring-tools"
+  packages = ["bindings/go/nvml"]
+  pruneopts = "UT"
+  revision = "86f2a9fac6c5b597dc494420005144b8ef7ec9fb"
+
+[[projects]]
+  branch = "master"
   digest = "1:3721a10686511b80c052323423f0de17a8c06d417dbdd3b392b1578432a33aae"
   name = "github.com/Nvveen/Gotty"
   packages = ["."]
@@ -433,6 +441,7 @@
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
+    "github.com/NVIDIA/gpu-monitoring-tools/bindings/go/nvml",
     "github.com/aws/aws-sdk-go/aws",
     "github.com/aws/aws-sdk-go/aws/arn",
     "github.com/aws/aws-sdk-go/aws/awserr",
