@@ -28,6 +28,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/dockerclient/sdkclientfactory"
 	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	"github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
+	"github.com/aws/amazon-ecs-agent/agent/gpu"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
@@ -121,6 +122,20 @@ func RunAgent(t *testing.T, options *AgentOptions) *TestAgent {
 	datadir := filepath.Join(agentTempdir, "data")
 	os.Mkdir(logdir, 0755)
 	os.Mkdir(datadir, 0755)
+	if options != nil {
+		if options.GPUEnabled {
+			// agent with GPU support enabled checks for the presence of GPU information file
+			// at '/var/lib/ecs/gpu/nvidia-gpu-info.json'. Hence, create a test file and bind mount
+			// to test agent container
+			gpudir := filepath.Join(agentTempdir, "gpu")
+			os.Mkdir(gpudir, 0755)
+			gpudata := []byte(`{"DriverVersion":"396.26","GPUIDs":["0","1","2","3"]}`)
+			err := ioutil.WriteFile(gpudir+"/nvidia-gpu-info.json", gpudata, 0755)
+			if err != nil {
+				t.Fatal("Could not create gpu info file for test")
+			}
+		}
+	}
 	agent.TestDir = agentTempdir
 	agent.Options = options
 	if options == nil {
@@ -267,6 +282,7 @@ func (agent *TestAgent) getBindMounts() []string {
 	hostDataDir := filepath.Join(agent.TestDir, "data")
 	hostConfigDir := filepath.Join(agent.TestDir, "config")
 	hostCacheDir := filepath.Join(agent.TestDir, "cache")
+	hostGPUDir := filepath.Join(agent.TestDir, "gpu")
 	agent.Logdir = hostLogDir
 
 	binds = append(binds, hostLogDir+":"+logdir)
@@ -274,6 +290,12 @@ func (agent *TestAgent) getBindMounts() []string {
 	binds = append(binds, dockerEndpoint+":"+dockerEndpoint)
 	binds = append(binds, hostConfigDir+":"+configDirectory)
 	binds = append(binds, hostCacheDir+":"+cacheDirectory)
+
+	if agent.Options != nil {
+		if agent.Options.GPUEnabled {
+			binds = append(binds, hostGPUDir+":"+gpu.GPUInfoDirPath)
+		}
+	}
 
 	return binds
 }
