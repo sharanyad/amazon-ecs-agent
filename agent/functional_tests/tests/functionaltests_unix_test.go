@@ -30,6 +30,7 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/ec2"
 	ecsapi "github.com/aws/amazon-ecs-agent/agent/ecs_client/model/ecs"
 	. "github.com/aws/amazon-ecs-agent/agent/functional_tests/util"
+	"github.com/aws/amazon-ecs-agent/agent/gpu"
 	"github.com/aws/amazon-ecs-agent/agent/utils"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
@@ -1250,18 +1251,21 @@ func TestSSMSecretsEncryptedASMSecrets(t *testing.T) {
 // Note: This functional test requires ECS GPU instance which has atleast 4 GPUs
 // Please use instance like p3.8xlarge for running this test
 func TestRunGPUTask(t *testing.T) {
-	gpuInstances := []string{"p2", "p3"}
+	gpuInstances := []string{"p2", "p3", "g3"}
 	var isGPUInstance bool
 	iid, _ := ec2.NewEC2MetadataClient(nil).InstanceIdentityDocument()
 	for _, gpuInstance := range gpuInstances {
 		if strings.HasPrefix(iid.InstanceType, gpuInstance) {
-			// GPU test should only run on p2/p3 ECS instances
+			// GPU test should only run on p2/p3/g3 ECS instances
 			isGPUInstance = true
 			break
 		}
 	}
 	if !isGPUInstance {
 		t.Skip("Skipped because the instance type is not a supported GPU instance type")
+	}
+	if _, err := os.Stat(gpu.NvidiaGPUInfoFilePath); os.IsNotExist(err) {
+		t.Skip("Skipped because GPU information file does not exist")
 	}
 	agent := RunAgent(t, &AgentOptions{
 		ExtraEnvironment: map[string]string{
@@ -1271,7 +1275,7 @@ func TestRunGPUTask(t *testing.T) {
 		GPUEnabled: true,
 	})
 	defer agent.Cleanup()
-	agent.RequireVersion(">=1.24.0")
+	agent.RequireVersion(">=1.22.0")
 
 	testTask, err := agent.StartTask(t, "nvidia-gpu")
 	require.NoError(t, err)

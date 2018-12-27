@@ -122,7 +122,7 @@ func RunAgent(t *testing.T, options *AgentOptions) *TestAgent {
 	datadir := filepath.Join(agentTempdir, "data")
 	os.Mkdir(logdir, 0755)
 	os.Mkdir(datadir, 0755)
-	if options != nil {
+	/*if options != nil {
 		if options.GPUEnabled {
 			// agent with GPU support enabled checks for the presence of GPU information file
 			// at '/var/lib/ecs/gpu/nvidia-gpu-info.json'. Hence, create a test file and bind mount
@@ -135,7 +135,7 @@ func RunAgent(t *testing.T, options *AgentOptions) *TestAgent {
 				t.Fatal("Could not create gpu info file for test")
 			}
 		}
-	}
+	}*/
 	agent.TestDir = agentTempdir
 	agent.Options = options
 	if options == nil {
@@ -282,7 +282,7 @@ func (agent *TestAgent) getBindMounts() []string {
 	hostDataDir := filepath.Join(agent.TestDir, "data")
 	hostConfigDir := filepath.Join(agent.TestDir, "config")
 	hostCacheDir := filepath.Join(agent.TestDir, "cache")
-	hostGPUDir := filepath.Join(agent.TestDir, "gpu")
+	//hostGPUDir := filepath.Join(agent.TestDir, "gpu")
 	agent.Logdir = hostLogDir
 
 	binds = append(binds, hostLogDir+":"+logdir)
@@ -293,7 +293,8 @@ func (agent *TestAgent) getBindMounts() []string {
 
 	if agent.Options != nil {
 		if agent.Options.GPUEnabled {
-			binds = append(binds, hostGPUDir+":"+gpu.GPUInfoDirPath)
+			//binds = append(binds, hostGPUDir+":"+gpu.GPUInfoDirPath)
+			binds = append(binds, gpu.GPUInfoDirPath+":"+gpu.GPUInfoDirPath)
 		}
 	}
 
