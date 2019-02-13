@@ -199,6 +199,9 @@ type Task struct {
 	// NvidiaRuntime is the runtime to pass Nvidia GPU devices to containers
 	NvidiaRuntime string `json:"NvidiaRuntime,omitempty"`
 
+	// GPUSupportEnabled is to determine if the task has nvidia GPU support
+	GPUSupportEnabled bool `json:"-"`
+
 	// lock is for protecting all fields in the task struct
 	lock sync.RWMutex
 }
@@ -271,6 +274,7 @@ func (task *Task) PostUnmarshalTask(cfg *config.Config,
 		return apierrors.NewResourceInitError(task.Arn, err)
 	}
 	if cfg.GPUSupportEnabled {
+		task.GPUSupportEnabled = cfg.GPUSupportEnabled
 		err = task.addGPUResource()
 		if err != nil {
 			seelog.Errorf("Task [%s]: could not initialize GPU associations: %v", task.Arn, err)
@@ -982,7 +986,7 @@ func (task *Task) dockerHostConfig(container *apicontainer.Container, dockerCont
 		Resources:    resources,
 	}
 
-	if task.shouldRequireNvidiaRuntime(container) {
+	if task.GPUSupportEnabled && task.shouldRequireNvidiaRuntime(container) {
 		if task.NvidiaRuntime == "" {
 			return nil, &apierrors.HostConfigError{"Runtime is not set for GPU containers"}
 		}

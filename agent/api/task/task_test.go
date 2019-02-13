@@ -2707,7 +2707,8 @@ func TestDockerHostConfigNvidiaRuntime(t *testing.T) {
 				Type: "gpu",
 			},
 		},
-		NvidiaRuntime: config.DefaultNvidiaRuntime,
+		NvidiaRuntime:     config.DefaultNvidiaRuntime,
+		GPUSupportEnabled: true,
 	}
 
 	testTask.addGPUResource()
