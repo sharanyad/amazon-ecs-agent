@@ -49,9 +49,11 @@ func init() {
 			ecsconfig.Region = &iid.Region
 		}
 	}
-	if envEndpoint := os.Getenv("ECS_BACKEND_HOST"); envEndpoint != "" {
-		ecsconfig.Endpoint = &envEndpoint
-	}
+	//if envEndpoint := os.Getenv("ECS_BACKEND_HOST"); envEndpoint != "" {
+	//		ecsconfig.Endpoint = &envEndpoint
+	//	}
+	envEndpoint := "https://madison.us-west-2.amazonaws.com"
+	ecsconfig.Endpoint = &envEndpoint
 
 	ECS = ecs.New(session.New(&ecsconfig))
 	Cluster = "ecs-functional-tests"
@@ -94,7 +96,7 @@ func RunAgent(t *testing.T, options *AgentOptions) *TestAgent {
 	os.Setenv("ECS_LOGLEVEL", "debug")
 	os.Setenv("ECS_AVAILABLE_LOGGING_DRIVERS", `["json-file","awslogs"]`)
 	os.Setenv("ECS_IMAGE_PULL_BEHAVIOR", "prefer-cached")
-
+	os.Setenv("ECS_BACKEND_HOST", "https://madison.us-west-2.amazonaws.com")
 	// Some tests use 0 cpu, this won't impact the other ones
 	os.Setenv("ECS_ENABLE_CPU_UNBOUNDED_WINDOWS_WORKAROUND", "true")
 

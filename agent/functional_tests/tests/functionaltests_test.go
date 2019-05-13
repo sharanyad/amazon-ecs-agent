@@ -488,7 +488,7 @@ func telemetryTest(t *testing.T, taskDefinition string) {
 
 	agentOptions := AgentOptions{
 		ExtraEnvironment: map[string]string{
-			"ECS_CLUSTER": newClusterName,
+			"ECS_CLUSTER":      newClusterName,
 		},
 	}
 	agent := RunAgent(t, &agentOptions)
