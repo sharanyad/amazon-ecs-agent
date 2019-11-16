@@ -443,7 +443,7 @@ func (agent *ecsAgent) getoutpostARN() string {
 	outpostARN, err := agent.ec2MetadataClient.OutpostARN()
 	if err != nil {
 		seelog.Warnf(
-			"Unable to obtain Outpost ARN from EC2 Metadata: %v", err)
+			"Unable to obtain Outpost ARN from EC2 Metadata: error: %v, outpostARN: %v", err, outpostARN)
 		return ""
 	}
 	return outpostARN
