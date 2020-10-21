@@ -710,7 +710,7 @@ func (engine *DockerTaskEngine) AddTask(task *apitask.Task) {
 		task.UpdateDesiredStatus()
 
 		engine.state.AddTask(task)
-		if dependencygraph.ValidDependencies(task) {
+		if dependencygraph.ValidDependencies(task, engine.cfg) {
 			engine.startTask(task)
 		} else {
 			seelog.Errorf("Task engine [%s]: unable to progress task with circular dependencies", task.Arn)

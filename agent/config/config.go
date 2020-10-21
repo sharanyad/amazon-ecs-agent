@@ -533,6 +533,7 @@ func environmentConfig() (Config, error) {
 		TaskCPUMemLimit:                     parseBooleanDefaultTrueConfig("ECS_ENABLE_TASK_CPU_MEM_LIMIT"),
 		DockerStopTimeout:                   parseDockerStopTimeout(),
 		ContainerStartTimeout:               parseContainerStartTimeout(),
+		ContainerPullInParallel:             parseBooleanDefaultFalseConfig("ECS_ENABLE_CONTAINER_PULL_IN_PARALLEL"),
 		ImagePullInactivityTimeout:          parseImagePullInactivityTimeout(),
 		ImagePullTimeout:                    parseEnvVariableDuration("ECS_IMAGE_PULL_TIMEOUT"),
 		CredentialsAuditLogFile:             os.Getenv("ECS_AUDIT_LOGFILE"),
@@ -599,6 +600,7 @@ func (cfg *Config) String() string {
 			"TaskCleanupWaitDuration: %v, "+
 			"DockerStopTimeout: %v, "+
 			"ContainerStartTimeout: %v, "+
+			"ContainerPullInParallel: %v, "+
 			"TaskCPUMemLimit: %v, "+
 			"%s",
 		cfg.Cluster,
@@ -614,6 +616,7 @@ func (cfg *Config) String() string {
 		cfg.TaskCleanupWaitDuration,
 		cfg.DockerStopTimeout,
 		cfg.ContainerStartTimeout,
+		cfg.ContainerPullInParallel,
 		cfg.TaskCPUMemLimit,
 		cfg.platformString(),
 	)
