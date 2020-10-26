@@ -81,7 +81,7 @@ func GetContainerResponse(containerID string, state dockerstate.TaskEngineState)
 func GetContainerNetworkMetadata(containerID string, state dockerstate.TaskEngineState) ([]containermetadata.Network, error) {
 	dockerContainer, ok := state.ContainerByID(containerID)
 	if !ok {
-		return nil, errors.Errorf("Unable to find container '%s'", containerID)
+		return []containermetadata.Network{}, nil
 	}
 	// the logic here has been reused from
 	// https://github.com/aws/amazon-ecs-agent/blob/0c8913ba33965cf6ffdd6253fad422458d9346bd/agent/containermetadata/parse_metadata.go#L123

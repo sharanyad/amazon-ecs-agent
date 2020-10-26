@@ -873,6 +873,12 @@ func (engine *DockerTaskEngine) pullAndUpdateContainerReference(task *apitask.Ta
 		return metadata
 	}
 	pullSucceeded := metadata.Error == nil
+	if pullSucceeded {
+               dockerContainer := &apicontainer.DockerContainer{
+                       Container: container,
+               }
+               engine.state.AddContainer(dockerContainer, task)
+       }
 	engine.updateContainerReference(pullSucceeded, container, task.Arn)
 	return metadata
 }
