@@ -1189,6 +1189,7 @@ func TestV4TaskMetadata(t *testing.T) {
 		state.EXPECT().TaskByArn(taskARN).Return(task, true).AnyTimes(),
 		state.EXPECT().ContainerMapByArn(taskARN).Return(containerNameToDockerContainer, true),
 		state.EXPECT().TaskByArn(taskARN).Return(task, true).AnyTimes(),
+		state.EXPECT().PulledContainerMapByArn(taskARN).Return(nil, true),
 	)
 	server := taskServerSetup(credentials.NewManager(), auditLog, state, ecsClient, clusterName, statsEngine,
 		config.DefaultTaskMetadataSteadyStateRate, config.DefaultTaskMetadataBurstRate, availabilityzone, containerInstanceArn)
@@ -1298,6 +1299,7 @@ func TestV4TaskMetadataWithTags(t *testing.T) {
 			},
 		}, nil),
 		state.EXPECT().TaskByArn(taskARN).Return(task, true).AnyTimes(),
+		state.EXPECT().PulledContainerMapByArn(taskARN).Return(nil, true),
 	)
 	server := taskServerSetup(credentials.NewManager(), auditLog, state, ecsClient, clusterName, statsEngine,
 		config.DefaultTaskMetadataSteadyStateRate, config.DefaultTaskMetadataBurstRate, availabilityzone, containerInstanceArn)
@@ -1331,6 +1333,7 @@ func TestV4BridgeTaskMetadata(t *testing.T) {
 		state.EXPECT().ContainerMapByArn(taskARN).Return(containerNameToBridgeContainer, true),
 		state.EXPECT().TaskByArn(taskARN).Return(bridgeTask, true),
 		state.EXPECT().ContainerByID(containerID).Return(bridgeContainer, true),
+		state.EXPECT().PulledContainerMapByArn(taskARN).Return(nil, true),
 	)
 
 	server := taskServerSetup(credentials.NewManager(), auditLog, state, ecsClient, clusterName, statsEngine,

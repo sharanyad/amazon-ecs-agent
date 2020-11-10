@@ -63,6 +63,18 @@ func (mr *MockTaskEngineStateMockRecorder) AddContainer(arg0, arg1 interface{}) 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddContainer", reflect.TypeOf((*MockTaskEngineState)(nil).AddContainer), arg0, arg1)
 }
 
+// AddPulledContainer mocks base method
+func (m *MockTaskEngineState) AddPulledContainer(arg0 *container.DockerContainer, arg1 *task.Task) {
+	m.ctrl.T.Helper()
+	m.ctrl.Call(m, "AddPulledContainer", arg0, arg1)
+}
+
+// AddPulledContainer indicates an expected call of AddPulledContainer
+func (mr *MockTaskEngineStateMockRecorder) AddPulledContainer(arg0, arg1 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddPulledContainer", reflect.TypeOf((*MockTaskEngineState)(nil).AddPulledContainer), arg0, arg1)
+}
+
 // AddENIAttachment mocks base method
 func (m *MockTaskEngineState) AddENIAttachment(arg0 *eni.ENIAttachment) {
 	m.ctrl.T.Helper()
@@ -181,6 +193,21 @@ func (m *MockTaskEngineState) ContainerMapByArn(arg0 string) (map[string]*contai
 func (mr *MockTaskEngineStateMockRecorder) ContainerMapByArn(arg0 interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ContainerMapByArn", reflect.TypeOf((*MockTaskEngineState)(nil).ContainerMapByArn), arg0)
+}
+
+// PulledContainerMapByArn mocks base method
+func (m *MockTaskEngineState) PulledContainerMapByArn(arg0 string) (map[string]*container.DockerContainer, bool) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "PulledContainerMapByArn", arg0)
+	ret0, _ := ret[0].(map[string]*container.DockerContainer)
+	ret1, _ := ret[1].(bool)
+	return ret0, ret1
+}
+
+// PulledContainerMapByArn indicates an expected call of PulledContainerMapByArn
+func (mr *MockTaskEngineStateMockRecorder) PulledContainerMapByArn(arg0 interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "PulledContainerMapByArn", reflect.TypeOf((*MockTaskEngineState)(nil).PulledContainerMapByArn), arg0)
 }
 
 // DockerIDByV3EndpointID mocks base method
