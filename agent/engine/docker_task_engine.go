@@ -25,6 +25,7 @@ import (
 	"sync"
 	"time"
 
+	//"github.com/aws/amazon-ecs-agent/agent/httpclient"
 	"github.com/aws/amazon-ecs-agent/agent/api"
 	apicontainer "github.com/aws/amazon-ecs-agent/agent/api/container"
 	apicontainerstatus "github.com/aws/amazon-ecs-agent/agent/api/container/status"
@@ -51,6 +52,10 @@ import (
 	"github.com/aws/amazon-ecs-agent/agent/utils/retry"
 	utilsync "github.com/aws/amazon-ecs-agent/agent/utils/sync"
 	"github.com/aws/amazon-ecs-agent/agent/utils/ttime"
+	"github.com/aws/aws-sdk-go/aws"
+	awscreds "github.com/aws/aws-sdk-go/aws/credentials"
+	"github.com/aws/aws-sdk-go/aws/session"
+	"github.com/aws/aws-sdk-go/service/servicediscovery"
 	dockercontainer "github.com/docker/docker/api/types/container"
 
 	"github.com/cihub/seelog"
@@ -739,14 +744,40 @@ func (engine *DockerTaskEngine) handleDockerEvent(event dockerapi.DockerContaine
 			event.DockerID)
 		return
 	}
+	taskID, err := task.GetID()
+	if err != nil {
+		seelog.Errorf("cannot get task ID, ugh: %v", task)
+	}
 
 	// Container health status change does not affect the container status
 	// no need to process this in task manager
 	if event.Type == apicontainer.ContainerHealthEvent {
 		if cont.Container.HealthStatusShouldBeReported() {
-			seelog.Debugf("Task engine: updating container [%s(%s)] health status: %v",
+			seelog.Infof("Task engine: updating container [%s(%s)] health status: %v",
 				cont.Container.Name, cont.DockerID, event.DockerContainerMetadata.Health)
 			cont.Container.SetHealthStatus(event.DockerContainerMetadata.Health)
+			accessKeyId := ""
+			secretAccessKey := ""
+			sessionToken := ""
+			cfg := aws.NewConfig().
+				WithRegion("us-west-2").
+				WithCredentials(
+					awscreds.NewStaticCredentials(accessKeyId, secretAccessKey, sessionToken))
+			sess := session.Must(session.NewSession(cfg))
+			cli := servicediscovery.New(sess)
+			instanceId := taskID
+			serviceId := "srv-5beu6qrs75mnczop"
+			status := event.DockerContainerMetadata.Health.Status.BackendStatus()
+			for i := 1; i <= 40 ; i ++ {
+			out, err := cli.UpdateInstanceCustomHealthStatus(&servicediscovery.UpdateInstanceCustomHealthStatusInput{InstanceId: &instanceId, ServiceId: &serviceId, Status: &status})
+			if err != nil {
+				seelog.Errorf("error updating the instance health status: %v", err)
+				time.Sleep(1 * time.Second)
+			} else {
+				seelog.Infof("successfully updated health for %s: %v", taskID, out)
+				break
+			}
+		}
 		}
 		return
 	}

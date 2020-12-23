@@ -10,7 +10,7 @@
   version = "v0.4.7"
 
 [[projects]]
-  digest = "1:5d44cd3c21be10148e4fe7fffb9bf6b4268bff6871d20d651530248ed0c8b5de"
+  digest = "1:dbf132c7d5e699edd748436e35f76f25b85a10a41d0f4776615d7bc0dfefdee0"
   name = "github.com/aws/aws-sdk-go"
   packages = [
     "aws",
@@ -66,6 +66,7 @@
     "service/s3/s3manager",
     "service/secretsmanager",
     "service/secretsmanager/secretsmanageriface",
+    "service/servicediscovery",
     "service/ssm",
     "service/sts",
     "service/sts/stsiface",
@@ -551,6 +552,7 @@
     "github.com/aws/aws-sdk-go/service/s3/s3manager",
     "github.com/aws/aws-sdk-go/service/secretsmanager",
     "github.com/aws/aws-sdk-go/service/secretsmanager/secretsmanageriface",
+    "github.com/aws/aws-sdk-go/service/servicediscovery",
     "github.com/aws/aws-sdk-go/service/ssm",
     "github.com/awslabs/go-config-generator-for-fluentd-and-fluentbit",
     "github.com/cihub/seelog",
