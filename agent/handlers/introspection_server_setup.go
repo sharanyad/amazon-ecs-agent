@@ -27,6 +27,8 @@ import (
 	v1 "github.com/aws/amazon-ecs-agent/agent/handlers/v1"
 	"github.com/aws/amazon-ecs-agent/agent/utils/retry"
 	"github.com/cihub/seelog"
+	"github.com/gorilla/mux"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
 )
 
 type rootResponse struct {
@@ -46,18 +48,20 @@ func introspectionServerSetup(containerInstanceArn *string, taskEngine handlersu
 		w.Write(availableCommandResponse)
 	}
 
-	serverMux := http.NewServeMux()
+	serverMux := mux.NewRouter()
+	serverMux.Use(otelmux.Middleware("ecs-introspection-server"))
 	serverMux.HandleFunc("/", defaultHandler)
 
 	v1HandlersSetup(serverMux, containerInstanceArn, taskEngine, cfg)
 
 	// Log all requests and then pass through to serverMux
-	loggingServeMux := http.NewServeMux()
-	loggingServeMux.Handle("/", LoggingHandler{serverMux})
+	rootPath := "/" + handlersutils.ConstructMuxVar("root", handlersutils.AnythingRegEx)
+	loggingMuxRouter := mux.NewRouter()
+	loggingMuxRouter.Handle(rootPath, NewLoggingHandler(serverMux))
 
 	server := &http.Server{
 		Addr:         ":" + strconv.Itoa(config.AgentIntrospectionPort),
-		Handler:      loggingServeMux,
+		Handler:      loggingMuxRouter,
 		ReadTimeout:  readTimeout,
 		WriteTimeout: writeTimeout,
 	}
@@ -66,7 +70,7 @@ func introspectionServerSetup(containerInstanceArn *string, taskEngine handlersu
 }
 
 // v1HandlersSetup adds all handlers except CredentialsHandler in v1 package to the server mux.
-func v1HandlersSetup(serverMux *http.ServeMux,
+func v1HandlersSetup(serverMux *mux.Router,
 	containerInstanceArn *string,
 	taskEngine handlersutils.DockerStateResolver,
 	cfg *config.Config) {

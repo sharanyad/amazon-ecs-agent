@@ -250,6 +250,14 @@
   version = "v1.3.5"
 
 [[projects]]
+  digest = "1:3adf0ef092abc82d9beeaa4473a798cb1b8ebae3c68ddb1b30eea52770c86f82"
+  name = "github.com/felixge/httpsnoop"
+  packages = ["."]
+  pruneopts = "UT"
+  revision = "33ec42cfe005395fb4cc4b296781f65d7ffef2c3"
+  version = "v1.0.1"
+
+[[projects]]
   digest = "1:57fa4c058c21ce25d0b7272518dd746065117abf6cc706158b0d361202024520"
   name = "github.com/godbus/dbus"
   packages = ["."]
@@ -277,12 +285,20 @@
   version = "1.3.1"
 
 [[projects]]
-  digest = "1:97df918963298c287643883209a2c3f642e6593379f97ab400c2a2e219ab647d"
+  branch = "master"
+  digest = "1:617351cae5773f5f0094580e7312b57821c62ffdc18b11857051278edd0d0c33"
   name = "github.com/golang/protobuf"
-  packages = ["proto"]
+  packages = [
+    "internal/gengogrpc",
+    "proto",
+    "protoc-gen-go",
+    "ptypes",
+    "ptypes/any",
+    "ptypes/duration",
+    "ptypes/timestamp",
+  ]
   pruneopts = "UT"
-  revision = "aa810b61a9c79d51363740d207bb46cf8e620ed5"
-  version = "v1.2.0"
+  revision = "4846b58453b3708320bdb524f25cc5a1d9cda4d4"
 
 [[projects]]
   digest = "1:c79fb010be38a59d657c48c6ba1d003a8aa651fa56b579d959d74573b7dff8e1"
@@ -470,6 +486,58 @@
   revision = "be1fbeda19366dea804f00efff2dd73a1642fdcc"
 
 [[projects]]
+  digest = "1:ae3b1a739ec45ee71f02b24e6d514c1269051fbc70a6a6b198930bed6427fc49"
+  name = "go.opentelemetry.io/contrib"
+  packages = [
+    ".",
+    "detectors/aws",
+    "instrumentation/github.com/gorilla/mux/otelmux",
+    "propagators/aws/xray",
+  ]
+  pruneopts = "UT"
+  revision = "e484e9ed9f64fcfd0d52fa780a5843762db26b65"
+  version = "v0.15.1"
+
+[[projects]]
+  digest = "1:5f7f5624096ab928d932823e0b4ab9d0da9f62afc278cd9868cf07edb8f3b4b8"
+  name = "go.opentelemetry.io/otel"
+  packages = [
+    ".",
+    "codes",
+    "exporters/otlp",
+    "exporters/otlp/internal/opentelemetry-proto-gen/collector/metrics/v1",
+    "exporters/otlp/internal/opentelemetry-proto-gen/collector/trace/v1",
+    "exporters/otlp/internal/opentelemetry-proto-gen/common/v1",
+    "exporters/otlp/internal/opentelemetry-proto-gen/metrics/v1",
+    "exporters/otlp/internal/opentelemetry-proto-gen/resource/v1",
+    "exporters/otlp/internal/opentelemetry-proto-gen/trace/v1",
+    "exporters/otlp/internal/transform",
+    "internal",
+    "internal/baggage",
+    "internal/global",
+    "internal/trace/noop",
+    "internal/trace/parent",
+    "label",
+    "metric",
+    "metric/number",
+    "metric/registry",
+    "propagation",
+    "sdk/export/metric",
+    "sdk/export/metric/aggregation",
+    "sdk/export/trace",
+    "sdk/instrumentation",
+    "sdk/internal",
+    "sdk/resource",
+    "sdk/trace",
+    "semconv",
+    "trace",
+    "unit",
+  ]
+  pruneopts = "UT"
+  revision = "61e07a0d629ff6a0c8f7054205972adc09540a53"
+  version = "v0.15.0"
+
+[[projects]]
   branch = "master"
   digest = "1:5a7b6061560d920434c4b853af04fd1027215d80c8645bba360841edb29e672a"
   name = "golang.org/x/crypto"
@@ -479,20 +547,26 @@
 
 [[projects]]
   branch = "master"
-  digest = "1:b765f093fdb6d062f72faf803670d32f3cec565d88637f951943f4d4ac2a6754"
+  digest = "1:0f068a3ec429648ba3a761f3cdbeceb171167fdb017e62c1af1f39679bb73162"
   name = "golang.org/x/net"
   packages = [
     "context",
     "html",
     "html/atom",
+    "http2",
+    "http2/hpack",
+    "idna",
+    "internal/timeseries",
+    "lex/httplex",
     "proxy",
+    "trace",
   ]
   pruneopts = "UT"
   revision = "a337091b0525af65de94df2eb7e98bd9962dcbe2"
 
 [[projects]]
   branch = "master"
-  digest = "1:4957ab15714ed2262e294e194634a9e55fe0d03248bfa6e860a9b8222b7c4bb6"
+  digest = "1:7bfc32f20c9996ff18c77b349cd86e834b655ad38043830ab523026da9837d6a"
   name = "golang.org/x/sys"
   packages = [
     "unix",
@@ -502,7 +576,32 @@
     "windows/svc/eventlog",
   ]
   pruneopts = "UT"
-  revision = "bf42f188b9bc6f2cf5b8ee5a912ef1aedd0eba4c"
+  revision = "1c9583448a9c3aa0f9a6a5241bf73c0bd8aafded"
+
+[[projects]]
+  digest = "1:33168e887aff0e3eae823593f38433f28928104925e54a6252937e6e3939f904"
+  name = "golang.org/x/text"
+  packages = [
+    "collate",
+    "collate/build",
+    "internal/colltab",
+    "internal/gen",
+    "internal/language",
+    "internal/language/compact",
+    "internal/tag",
+    "internal/triegen",
+    "internal/ucd",
+    "language",
+    "secure/bidirule",
+    "transform",
+    "unicode/bidi",
+    "unicode/cldr",
+    "unicode/norm",
+    "unicode/rangetable",
+  ]
+  pruneopts = "UT"
+  revision = "75a595aef632b07c6eeaaa805adb6f0f66e4130e"
+  version = "v0.3.5"
 
 [[projects]]
   branch = "master"
@@ -521,6 +620,109 @@
   ]
   pruneopts = "UT"
   revision = "bd4635fd25596cdd56c1fb399c53b351d1a81f2d"
+
+[[projects]]
+  branch = "master"
+  digest = "1:7339759b4869e4b12e0ab4848f0f5edaa3c045b9b1cfe1d22af121605322490c"
+  name = "google.golang.org/genproto"
+  packages = ["googleapis/rpc/status"]
+  pruneopts = "UT"
+  revision = "ffc7fda8c3d7aa98893e84ac6c506837e2f3d085"
+
+[[projects]]
+  digest = "1:3f2a827dee58351f7f44ef630b7759b5869934cd99b97f64645536a982e9ff4c"
+  name = "google.golang.org/grpc"
+  packages = [
+    ".",
+    "attributes",
+    "backoff",
+    "balancer",
+    "balancer/base",
+    "balancer/grpclb/state",
+    "balancer/roundrobin",
+    "binarylog/grpc_binarylog_v1",
+    "codes",
+    "connectivity",
+    "credentials",
+    "encoding",
+    "encoding/proto",
+    "grpclog",
+    "internal",
+    "internal/backoff",
+    "internal/balancerload",
+    "internal/binarylog",
+    "internal/buffer",
+    "internal/channelz",
+    "internal/credentials",
+    "internal/envconfig",
+    "internal/grpclog",
+    "internal/grpcrand",
+    "internal/grpcsync",
+    "internal/grpcutil",
+    "internal/resolver",
+    "internal/resolver/dns",
+    "internal/resolver/passthrough",
+    "internal/resolver/unix",
+    "internal/serviceconfig",
+    "internal/status",
+    "internal/syscall",
+    "internal/transport",
+    "internal/transport/networktype",
+    "keepalive",
+    "metadata",
+    "peer",
+    "resolver",
+    "serviceconfig",
+    "stats",
+    "status",
+    "tap",
+  ]
+  pruneopts = "UT"
+  revision = "2cf12a82ed4381ce0b0f7d487ee2eca772ee18e3"
+  version = "v1.34.0"
+
+[[projects]]
+  digest = "1:a13c8223dba9f3f6788b8942e80cb81d42a0b7cc8f9d741de7b78238a2588177"
+  name = "google.golang.org/protobuf"
+  packages = [
+    "cmd/protoc-gen-go/internal_gengo",
+    "compiler/protogen",
+    "encoding/prototext",
+    "encoding/protowire",
+    "internal/descfmt",
+    "internal/descopts",
+    "internal/detrand",
+    "internal/encoding/defval",
+    "internal/encoding/messageset",
+    "internal/encoding/tag",
+    "internal/encoding/text",
+    "internal/errors",
+    "internal/fieldsort",
+    "internal/filedesc",
+    "internal/filetype",
+    "internal/flags",
+    "internal/genid",
+    "internal/impl",
+    "internal/mapsort",
+    "internal/pragma",
+    "internal/set",
+    "internal/strs",
+    "internal/version",
+    "proto",
+    "reflect/protodesc",
+    "reflect/protoreflect",
+    "reflect/protoregistry",
+    "runtime/protoiface",
+    "runtime/protoimpl",
+    "types/descriptorpb",
+    "types/known/anypb",
+    "types/known/durationpb",
+    "types/known/timestamppb",
+    "types/pluginpb",
+  ]
+  pruneopts = "UT"
+  revision = "3f7a61f89bb6813f89d981d1870ed68da0b3c3f1"
+  version = "v1.25.0"
 
 [solve-meta]
   analyzer-name = "dep"
@@ -575,6 +777,7 @@
     "github.com/etcd-io/bbolt",
     "github.com/golang/mock/gomock",
     "github.com/golang/mock/mockgen/model",
+    "github.com/golang/protobuf/protoc-gen-go",
     "github.com/gorilla/mux",
     "github.com/gorilla/websocket",
     "github.com/opencontainers/runtime-spec/specs-go",
@@ -587,6 +790,12 @@
     "github.com/stretchr/testify/require",
     "github.com/stretchr/testify/suite",
     "github.com/vishvananda/netlink",
+    "go.opentelemetry.io/contrib/detectors/aws",
+    "go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux",
+    "go.opentelemetry.io/contrib/propagators/aws/xray",
+    "go.opentelemetry.io/otel",
+    "go.opentelemetry.io/otel/exporters/otlp",
+    "go.opentelemetry.io/otel/sdk/trace",
     "golang.org/x/net/context",
     "golang.org/x/sys/windows",
     "golang.org/x/sys/windows/registry",

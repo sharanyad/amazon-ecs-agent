@@ -34,6 +34,8 @@ import (
 	"github.com/cihub/seelog"
 	"github.com/didip/tollbooth"
 	"github.com/gorilla/mux"
+	"go.opentelemetry.io/contrib/instrumentation/github.com/gorilla/mux/otelmux"
+	"go.opentelemetry.io/otel"
 )
 
 const (
@@ -46,6 +48,8 @@ const (
 	writeTimeout = 5 * time.Second
 )
 
+var tracer = otel.Tracer("task-metadata-endpoint")
+
 func taskServerSetup(credentialsManager credentials.Manager,
 	auditLogger audit.AuditLogger,
 	state dockerstate.TaskEngineState,
@@ -56,8 +60,9 @@ func taskServerSetup(credentialsManager credentials.Manager,
 	burstRate int,
 	availabilityZone string,
 	containerInstanceArn string) *http.Server {
+	//initTracer()
 	muxRouter := mux.NewRouter()
-
+	muxRouter.Use(otelmux.Middleware("ecs-task-server"))
 	// Set this to false so that for request like "//v3//metadata/task"
 	// to permanently redirect(301) to "/v3/metadata/task" handler
 	muxRouter.SkipClean(false)
@@ -195,3 +200,4 @@ func ServeTaskHTTPEndpoint(
 		})
 	}
 }
+

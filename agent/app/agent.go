@@ -58,6 +58,11 @@ import (
 	"github.com/aws/aws-sdk-go/aws/defaults"
 	"github.com/cihub/seelog"
 	"github.com/pborman/uuid"
+	"go.opentelemetry.io/contrib/propagators/aws/xray"
+	"go.opentelemetry.io/otel"
+	awsdetect "go.opentelemetry.io/contrib/detectors/aws"
+	"go.opentelemetry.io/otel/exporters/otlp"
+	sdktrace "go.opentelemetry.io/otel/sdk/trace"
 )
 
 const (
@@ -270,6 +275,8 @@ func (agent *ecsAgent) doStart(containerChangeEventStream *eventstream.EventStre
 	if loadPauseErr != nil {
 		seelog.Errorf("Failed to load pause container: %v", loadPauseErr)
 	}
+
+	InitTracer()
 
 	var vpcSubnetAttributes []*ecs.Attribute
 	// Check if Task ENI is enabled
@@ -807,4 +814,38 @@ func (agent *ecsAgent) saveMetadata(key, val string) {
 	if err != nil {
 		seelog.Errorf("Failed to save agent metadata to disk (key: [%s], value: [%s]): %v", key, val, err)
 	}
+}
+
+func InitTracer() {
+	// Create new OTLP Exporter struct
+	exporter, err := otlp.NewExporter(
+		context.Background(),
+		otlp.WithInsecure(),
+		otlp.WithAddress("localhost:55680"),
+	)
+	if err != nil {
+		seelog.Errorf("Error creating OTL exporter for instrumentation: %v", err)
+	}
+	cfg := sdktrace.Config{
+		DefaultSampler: sdktrace.AlwaysSample(),
+	}
+	// A custom ID Generator to generate traceIDs that conform to
+	// AWS X-Ray traceID format
+	idg := xray.NewIDGenerator()
+	// Create a new TraceProvider struct passing in the config, the exporter
+	// and the ID Generator we want to use for our tracing
+	awsresource := new(awsdetect.AWS)
+	resource, err := awsresource.Detect(context.Background())
+        if err != nil {
+		seelog.Errorf("cannot detect AWS resource")
+	}
+	tp := sdktrace.NewTracerProvider(
+		sdktrace.WithConfig(cfg),
+		sdktrace.WithSyncer(exporter),
+		sdktrace.WithIDGenerator(idg),
+		sdktrace.WithResource(resource),
+	)
+	// Set the traceprovider and the propagator we want to use
+	otel.SetTracerProvider(tp)
+	otel.SetTextMapPropagator(xray.Propagator{})
 }
