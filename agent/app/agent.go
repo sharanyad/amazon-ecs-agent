@@ -18,6 +18,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"os/exec"
+	"strconv"
 	"time"
 
 	"github.com/aws/amazon-ecs-agent/agent/metrics"
@@ -82,6 +85,7 @@ type agent interface {
 	// printECSAttributes prints the Agent's capabilities based on
 	// its environment
 	printECSAttributes() int
+	getContainerSecurity(string) int
 	// startWindowsService starts the agent as a Windows Service
 	startWindowsService() int
 	// start starts the Agent execution
@@ -207,6 +211,22 @@ func (agent *ecsAgent) printECSAttributes() int {
 	}
 	for _, attr := range capabilities {
 		fmt.Printf("%s\t%s\n", aws.StringValue(attr.Name), aws.StringValue(attr.Value))
+	}
+	return exitcodes.ExitSuccess
+}
+
+func (agent *ecsAgent) getContainerSecurity(cont string) int {
+	check := "check_5_1"
+	for i := 2; i <= 31; i++ {
+		check = check + ",check_5_" + strconv.Itoa(i)
+	}
+	cmd := exec.Command("./docker-bench-security.sh", "-c", check, "-i", cont)
+	cmd.Stderr = os.Stderr
+	cmd.Stdout = os.Stdout
+	err := cmd.Run()
+	if err != nil {
+		fmt.Printf("%s", err)
+		return exitcodes.ExitError
 	}
 	return exitcodes.ExitSuccess
 }

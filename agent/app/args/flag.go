@@ -28,6 +28,7 @@ const (
 	blacholeEC2MetadataUsage = "Blackhole the EC2 Metadata requests. Setting this option can cause the ECS Agent to fail to work properly.  We do not recommend setting this option"
 	windowsServiceUsage      = "Run the ECS agent as a Windows Service"
 	healthcheckServiceUsage  = "Run the agent healthcheck"
+	contSecCheckUsage        = "Scan task's containers for security vulnerabilities"
 
 	versionFlagName              = "version"
 	logLevelFlagName             = "loglevel"
@@ -39,6 +40,7 @@ const (
 	blackholeEC2MetadataFlagName = "blackhole-ec2-metadata"
 	windowsServiceFlagName       = "windows-service"
 	healthCheckFlagName          = "healthcheck"
+	contSecCheckFlagName         = "task-security-check"
 )
 
 // Args wraps various ECS Agent arguments
@@ -64,7 +66,8 @@ type Args struct {
 	// WindowsService indicates that the agent should run as a Windows service
 	WindowsService *bool
 	// Healthcheck indicates that agent should run healthcheck
-	Healthcheck *bool
+	Healthcheck  *bool
+	ContSecCheck *string
 }
 
 // New creates a new Args object from the argument list
@@ -82,6 +85,7 @@ func New(arguments []string) (*Args, error) {
 		ECSAttributes:        flagset.Bool(ecsAttributesFlagName, false, ecsAttributesUsage),
 		WindowsService:       flagset.Bool(windowsServiceFlagName, false, windowsServiceUsage),
 		Healthcheck:          flagset.Bool(healthCheckFlagName, false, healthcheckServiceUsage),
+		ContSecCheck:         flagset.String(contSecCheckFlagName, "", contSecCheckUsage),
 	}
 
 	err := flagset.Parse(arguments)

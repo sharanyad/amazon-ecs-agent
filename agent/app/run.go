@@ -60,6 +60,10 @@ func Run(arguments []string) int {
 		return exitcodes.ExitError
 	}
 
+	if *parsedArgs.ContSecCheck != "" {
+		return agent.getContainerSecurity(*parsedArgs.ContSecCheck)
+	}
+
 	switch {
 	case *parsedArgs.ECSAttributes:
 		// Print agent's ecs attributes based on its environment and exit
