@@ -262,8 +262,10 @@ func (cs *clientServer) publishHealthMetricsOnce() error {
 	if err != nil {
 		return err
 	}
+	seelog.Infof("sending requests to publish health metrics at %s", time.Now().UTC().String())
 	// Make the publish metrics request to the backend.
 	for _, request := range requests {
+		seelog.Infof("health request sent is: %v", request)
 		err = cs.MakeRequest(request)
 		if err != nil {
 			return err
