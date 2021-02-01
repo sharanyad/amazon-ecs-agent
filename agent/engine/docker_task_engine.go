@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -264,7 +265,52 @@ func (engine *DockerTaskEngine) Init(ctx context.Context) error {
 	go engine.handleDockerEvents(derivedCtx)
 	engine.initialized = true
 	go engine.startPeriodicExecAgentsMonitoring(derivedCtx)
+	go engine.startPeriodicClientTaskHealthCheck(derivedCtx)
 	return nil
+}
+
+func (engine *DockerTaskEngine) startPeriodicClientTaskHealthCheck(ctx context.Context) {
+	clientSideHealthCheckTicker := time.NewTicker(5 * time.Second)
+	for {
+		select {
+		case <-clientSideHealthCheckTicker.C:
+			go engine.clientSideHealthCheck(ctx)
+		case <-ctx.Done():
+			clientSideHealthCheckTicker.Stop()
+			return
+		}
+	}
+}
+
+func (engine *DockerTaskEngine) clientSideHealthCheck(ctx context.Context) {
+	engine.tasksLock.RLock()
+	defer engine.tasksLock.RUnlock()
+	for _, mTask := range engine.managedTasks {
+		task := mTask.Task
+		// check if task is service discovery enabled
+		if task.GetKnownStatus() != apitaskstatus.TaskRunning {
+			continue
+		}
+		// get IP and ports for the task's containers
+		for _, c := range task.Containers {
+			ip := task.GetLocalIPAddress()
+			if ip == "" {
+				seelog.Infof("ip not found -- need another way to get it")
+				break
+			}
+			seelog.Infof("ip is obtained successfully - %s", ip)
+			ports := c.GetKnownPortBindings()
+			timeout := 2 * time.Second
+			for _, port := range ports {
+				seelog.Infof("port for ip %is is %s", ip, port)
+				_, err := net.DialTimeout("tcp", net.JoinHostPort(ip, string(port.ContainerPort)), timeout)
+				fmt.Println("done with net dial call")
+				if err != nil {
+					fmt.Println("error tcp dialing", err)
+				}
+			}
+		}
+	}
 }
 
 func (engine *DockerTaskEngine) startPeriodicExecAgentsMonitoring(ctx context.Context) {
@@ -768,16 +814,16 @@ func (engine *DockerTaskEngine) handleDockerEvent(event dockerapi.DockerContaine
 			instanceId := taskID
 			serviceId := "srv-5beu6qrs75mnczop"
 			status := event.DockerContainerMetadata.Health.Status.BackendStatus()
-			for i := 1; i <= 40 ; i ++ {
-			out, err := cli.UpdateInstanceCustomHealthStatus(&servicediscovery.UpdateInstanceCustomHealthStatusInput{InstanceId: &instanceId, ServiceId: &serviceId, Status: &status})
-			if err != nil {
-				seelog.Errorf("error updating the instance health status: %v", err)
-				time.Sleep(1 * time.Second)
-			} else {
-				seelog.Infof("successfully updated health for %s: %v", taskID, out)
-				break
+			for i := 1; i <= 40; i++ {
+				out, err := cli.UpdateInstanceCustomHealthStatus(&servicediscovery.UpdateInstanceCustomHealthStatusInput{InstanceId: &instanceId, ServiceId: &serviceId, Status: &status})
+				if err != nil {
+					seelog.Errorf("error updating the instance health status: %v", err)
+					time.Sleep(1 * time.Second)
+				} else {
+					seelog.Infof("successfully updated health for %s: %v", taskID, out)
+					break
+				}
 			}
-		}
 		}
 		return
 	}
