@@ -293,13 +293,13 @@ func (engine *DockerTaskEngine) clientSideHealthCheck(ctx context.Context) {
 		}
 		// get IP and ports for the task's containers
 		for _, c := range task.Containers {
-			ip := task.GetLocalIPAddress()
+			ip := task.GetPrimaryENI().IPV4Addresses[0]
 			if ip == "" {
 				seelog.Infof("ip not found -- need another way to get it")
 				break
 			}
 			seelog.Infof("ip is obtained successfully - %s", ip)
-			ports := c.GetKnownPortBindings()
+			ports := c.Ports
 			timeout := 2 * time.Second
 			for _, port := range ports {
 				seelog.Infof("port for ip %is is %s", ip, port)
