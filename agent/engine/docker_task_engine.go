@@ -292,24 +292,25 @@ func (engine *DockerTaskEngine) clientSideHealthCheck(ctx context.Context) {
 			continue
 		}
 		// get IP and ports for the task's containers
-		for _, c := range task.Containers {
-			ip := task.GetPrimaryENI().IPV4Addresses[0]
+		//for _, _ := range task.Containers {
+			ip := task.GetPrimaryENI().GetIPV4Addresses()[0]
 			if ip == "" {
 				seelog.Infof("ip not found -- need another way to get it")
 				break
 			}
 			seelog.Infof("ip is obtained successfully - %s", ip)
-			ports := c.Ports
+			//ports := c.Ports
 			timeout := 2 * time.Second
-			for _, port := range ports {
-				seelog.Infof("port for ip %is is %s", ip, port)
-				_, err := net.DialTimeout("tcp", net.JoinHostPort(ip, string(port.ContainerPort)), timeout)
-				fmt.Println("done with net dial call")
+			//for _, port := range ports {
+				//seelog.Infof("port for ip %is is %s", ip, port)
+				//_, err := net.DialTimeout("tcp", net.JoinHostPort(ip, string(port.ContainerPort)), timeout)
+				_, err := net.DialTimeout("tcp", net.JoinHostPort(ip, "443"), timeout)
+				seelog.Infof("done with net dial call")
 				if err != nil {
-					fmt.Println("error tcp dialing", err)
+					seelog.Errorf("error tcp dialing", err)
 				}
-			}
-		}
+			//}
+		//}
 	}
 }
 

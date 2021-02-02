@@ -183,6 +183,7 @@ func (payloadHandler *payloadRequestHandler) handleSingleMessage(payload *ecsacs
 func (payloadHandler *payloadRequestHandler) addPayloadTasks(payload *ecsacs.PayloadMessage) ([]*ecsacs.IAMRoleCredentialsAckRequest, bool) {
 	// verify that we were able to work with all tasks in this payload so we know whether to ack the whole thing or not
 	allTasksOK := true
+	seelog.Infof("payload received is - %v", payload)
 
 	validTasks := make([]*apitask.Task, 0, len(payload.Tasks))
 	for _, task := range payload.Tasks {
